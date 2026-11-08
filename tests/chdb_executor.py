@@ -1,4 +1,4 @@
-"""In-process ClickHouse (chdb) executor used by the integration test of the ClickHouse layer."""
+"""Встроенный исполнитель ClickHouse (chdb) для интеграционного теста слоя ClickHouse."""
 from __future__ import annotations
 
 import os

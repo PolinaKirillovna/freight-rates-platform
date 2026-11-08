@@ -1,7 +1,7 @@
-"""Mart layer refresh in PostgreSQL.
+"""Обновление слоя витрин в PostgreSQL.
 
-Only the months marked dirty by the core step are recomputed (DELETE + INSERT of those months in
-one transaction), then the thin materialized view with MoM/YoY and reliability is refreshed.
+Пересчитываются только месяцы, помеченные грязными на шаге core (DELETE + INSERT этих месяцев в
+одной транзакции), затем обновляется тонкое материализованное представление с MoM/YoY и надёжностью.
 """
 from __future__ import annotations
 
@@ -48,8 +48,8 @@ def refresh_marts(settings: Settings, full_refresh: bool = False) -> dict:
         conn.execute("DELETE FROM etl.dirty_months WHERE consumer = %s", (CONSUMER,))
         conn.commit()
 
-    # REFRESH ... CONCURRENTLY keeps the view readable for BI while it rebuilds,
-    # but it requires the view to be populated once; the first refresh is a plain one.
+    # REFRESH ... CONCURRENTLY держит представление доступным для BI во время перестройки,
+    # но требует, чтобы оно было хотя бы раз наполнено; первое обновление — обычное.
     with connect(settings.dwh, autocommit=True) as conn:
         populated = conn.execute(
             "SELECT ispopulated FROM pg_matviews WHERE schemaname = 'mart' AND matviewname = 'mart_route_card'"

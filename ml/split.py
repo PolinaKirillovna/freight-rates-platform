@@ -1,4 +1,4 @@
-"""Deterministic chronological split anchored at the snapshot date (never the wall clock)."""
+"""Детерминированное хронологическое разбиение с привязкой к дате снимка (никогда к системным часам)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,10 +10,10 @@ import pandas as pd
 @dataclass(frozen=True)
 class TimeSplit:
     as_of: date
-    train_start: date        # inclusive
-    train_end: date          # exclusive; equals test_start
-    test_start: date         # inclusive
-    test_end: date           # inclusive; equals as_of
+    train_start: date        # включительно
+    train_end: date          # не включительно; равно test_start
+    test_start: date         # включительно
+    test_end: date           # включительно; равно as_of
 
     @classmethod
     def from_as_of(cls, as_of: date, train_months: int = 3, test_weeks: int = 3) -> TimeSplit:

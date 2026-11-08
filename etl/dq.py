@@ -1,8 +1,8 @@
-"""Data quality rules for deals. Every rule is a vectorised predicate returning True for BAD rows.
+"""Правила качества данных по сделкам. Каждое правило — векторный предикат, возвращающий True для плохих строк.
 
-Rejected rows are not dropped silently: each (deal, failed rule) pair goes to dq.quarantine_prices.
-Same-city routes (loading = unloading) are kept on purpose — the source job keeps them with their
-distance — and only flagged in core (same_city_route).
+Отбракованные строки не теряются молча: каждая пара (сделка, сработавшее правило) идёт в dq.quarantine_prices.
+Маршруты внутри одного города (loading = unloading) сохраняются намеренно — исходный job оставляет их с
+расстоянием — и только помечаются в core (same_city_route).
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from etl.rules import EUR, KNOWN_CURRENCIES, RUB, RUB_MIN_VALID_PRICE, USD
 @dataclass(frozen=True)
 class DqContext:
     known_gcids: set[int]
-    rate_keys: set[tuple[str, object]]      # (currency_code, rate_date) pairs present in exchange rates
+    rate_keys: set[tuple[str, object]]      # пары (currency_code, rate_date), присутствующие в курсах валют
 
 
 @dataclass(frozen=True)
@@ -57,7 +57,7 @@ RULES: list[Rule] = [
 @dataclass
 class DqResult:
     clean: pd.DataFrame
-    quarantine: pd.DataFrame          # price_id, reason_code, details + context columns
+    quarantine: pd.DataFrame          # price_id, reason_code, details + контекстные столбцы
     stats: dict[str, int]
 
 
@@ -66,7 +66,7 @@ def validate(prices: pd.DataFrame, ctx: DqContext) -> DqResult:
     frames = []
     stats: dict[str, int] = {}
     for rule in RULES:
-        mask = rule.predicate(prices, ctx).fillna(True).astype(bool)   # NULL in a checked field = bad
+        mask = rule.predicate(prices, ctx).fillna(True).astype(bool)   # NULL в проверяемом поле = брак
         stats[rule.code] = int(mask.sum())
         if mask.any():
             rejected = prices.loc[mask, ["id", "loading_date", "currency_code", "price", "distance"]].copy()

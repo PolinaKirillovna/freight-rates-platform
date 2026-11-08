@@ -1,8 +1,8 @@
-"""Feature pipeline for the trip price model.
+"""Конвейер признаков для модели цены рейса.
 
-Only attributes known before the trip is priced are allowed. Anything derived from the target
-(price with VAT, price per km / per tonne of the same deal, margin components, nightly group
-aggregates from price_group_stats, the outlier flag) is forbidden and checked by assert_no_leakage.
+Разрешены только атрибуты, известные до назначения цены рейса. Всё производное от целевой
+переменной (цена с НДС, цена за км / за тонну той же сделки, маржинальные компоненты, ночные
+групповые агрегаты из price_group_stats, флаг выброса) запрещено и проверяется assert_no_leakage.
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def add_calendar_features(df: pd.DataFrame, date_col: str = "loading_date") -> p
     d = pd.to_datetime(out[date_col])
     out["year"] = d.dt.year.astype("int32")
     out["month"] = d.dt.month.astype("int32")
-    out["day_of_week"] = d.dt.dayofweek.astype("int32")          # Monday = 0
+    out["day_of_week"] = d.dt.dayofweek.astype("int32")          # понедельник = 0
     out["day_of_year"] = d.dt.dayofyear.astype("int32")
     for name, t, period in (("month", out["month"], PERIODS["month"]),
                             ("dow", out["day_of_week"], PERIODS["dow"]),
@@ -56,7 +56,7 @@ def assert_no_leakage(columns) -> None:
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Return the model matrix. Categorical NaN becomes the literal 'NA' (a constant, not a fitted statistic)."""
+    """Вернуть матрицу признаков. NaN в категориях становится литералом 'NA' (константа, а не обученная статистика)."""
     enriched = add_calendar_features(df)
     X = enriched[FEATURES].copy()
     for col in CATEGORICAL_FEATURES:

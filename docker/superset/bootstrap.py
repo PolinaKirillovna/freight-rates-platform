@@ -1,8 +1,8 @@
-"""Provision Superset: database connections, datasets, charts and the «Рынок грузовых ставок» dashboard.
+"""Настройка Superset: подключения к базам, наборы данных, графики и дашборд «Рынок грузовых ставок».
 
-Runs inside the Superset container through the application ORM (the same way Superset loads its
-examples), so it does not depend on REST authentication. Idempotent: objects are looked up by name
-and recreated, so restarting the container converges to the same state.
+Выполняется внутри контейнера Superset через ORM приложения (так же, как Superset грузит свои
+примеры), поэтому не зависит от аутентификации REST. Идемпотентно: объекты ищутся по имени и
+пересоздаются, поэтому перезапуск контейнера сходится к тому же состоянию.
 """
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def build_query_context(datasource_id: int, viz_type: str, params: dict) -> str:
     return json.dumps(context, ensure_ascii=False)
 
 
-# name -> (dataset key, viz_type, form_data without datasource)
+# имя -> (ключ набора данных, viz_type, form_data без datasource)
 CHARTS: dict[str, tuple[str, str, dict]] = {
     "MAPE модели на тесте, %": ("model_quality", "big_number_total", {
         "metric": metric("MAX(mape_pct)", "MAPE, %"),
@@ -162,7 +162,7 @@ GROUP BY route
 ORDER BY trips_count DESC
 """
 
-LAYOUT = [  # rows of (chart name, width out of 12, height)
+LAYOUT = [  # строки из (имя графика, ширина из 12, высота)
     [("MAPE модели на тесте, %", 4, 25), ("R² модели на тесте", 4, 25), ("Сделок в карантине", 4, 25)],
     [("Коридор ставок по выбранному маршруту", 6, 60), ("Медиана ₽/км по группам кузова на выбранном маршруте", 6, 60)],
     [("Сеть маршрутов за последний месяц", 12, 80)],
@@ -245,7 +245,7 @@ def main() -> None:
                 dataset.fetch_metadata()
                 db.session.commit()
                 return dataset
-            except Exception as exc:  # noqa: BLE001 - provisioning must not block startup
+            except Exception as exc:  # noqa: BLE001 — настройка не должна блокировать запуск
                 db.session.rollback()
                 print(f"WARNING: dataset {schema}.{table} skipped: {exc}")
                 return None

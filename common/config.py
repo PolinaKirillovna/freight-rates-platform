@@ -1,4 +1,4 @@
-"""Pipeline configuration from environment variables (see .env.example)."""
+"""Конфигурация конвейера из переменных окружения (см. .env.example)."""
 from __future__ import annotations
 
 import os

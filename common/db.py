@@ -1,4 +1,4 @@
-"""PostgreSQL helpers: connections, bulk COPY of DataFrames, migrations and run journal."""
+"""Помощники PostgreSQL: соединения, массовый COPY датафреймов, миграции и журнал запусков."""
 from __future__ import annotations
 
 import io
@@ -30,7 +30,7 @@ def fetch_df(conn: psycopg.Connection, query: str, params: dict | Sequence | Non
 
 
 def copy_df(conn: psycopg.Connection, table: str, df: pd.DataFrame, columns: Sequence[str] | None = None) -> int:
-    """Bulk-load a DataFrame with COPY ... FROM STDIN (CSV). No per-row INSERTs."""
+    """Массовая загрузка датафрейма через COPY ... FROM STDIN (CSV). Без построчных INSERT."""
     columns = list(columns or df.columns)
     if df.empty:
         return 0
@@ -47,7 +47,7 @@ def copy_df(conn: psycopg.Connection, table: str, df: pd.DataFrame, columns: Seq
 
 
 def apply_migrations(dsn: PostgresDsn) -> list[str]:
-    """Apply sql/dwh/*.sql in order. Every file is idempotent (IF NOT EXISTS), applied list is journaled."""
+    """Применить sql/dwh/*.sql по порядку. Каждый файл идемпотентен (IF NOT EXISTS), список применённых — в журнал."""
     applied: list[str] = []
     with connect(dsn) as conn:
         conn.execute(
@@ -77,7 +77,7 @@ def set_setting(conn: psycopg.Connection, key: str, value: str) -> None:
 
 @contextmanager
 def run_journal(dsn: PostgresDsn, step: str, batch_id: uuid.UUID, window: tuple | None = None) -> Iterator[dict]:
-    """Record a step run in etl.run_log; the yielded dict collects metrics."""
+    """Записать запуск шага в etl.run_log; возвращаемый словарь собирает метрики."""
     metrics: dict = {}
     started = datetime.now(UTC)
     start, end = window if window else (None, None)

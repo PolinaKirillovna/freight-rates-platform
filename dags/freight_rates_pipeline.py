@@ -34,7 +34,7 @@ def _context_window() -> tuple[uuid.UUID, date, date]:
 
 
 def _settings():
-    """Inside Airflow the task log handlers are kept: project loggers propagate to them."""
+    """Внутри Airflow обработчики логов задачи сохраняются: логгеры проекта передают события им."""
     import logging
 
     from common.config import load_settings

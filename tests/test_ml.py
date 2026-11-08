@@ -31,8 +31,8 @@ def test_boundary_day_belongs_only_to_test_and_future_is_separate():
 def test_cyclic_features_are_continuous_over_new_year():
     df = add_calendar_features(pd.DataFrame({"loading_date": pd.to_datetime(["2025-12-31", "2026-01-01", "2026-07-02"])}))
     dec31, jan1, jul2 = df[["doy_sin", "doy_cos"]].to_numpy()
-    assert np.linalg.norm(dec31 - jan1) < 0.05            # neighbours on the circle
-    assert np.linalg.norm(dec31 - jul2) > 1.9             # opposite side of the year
+    assert np.linalg.norm(dec31 - jan1) < 0.05            # соседи на окружности
+    assert np.linalg.norm(dec31 - jul2) > 1.9             # противоположная сторона года
     assert np.allclose(df["month_sin"] ** 2 + df["month_cos"] ** 2, 1.0)
 
 
@@ -66,7 +66,7 @@ def test_leakage_guard_rejects_forbidden_columns(leak):
 def test_train_cleaning_uses_flag_and_train_statistics_only():
     train = _sample(200)
     train.loc[0, "outlier_mark"] = True
-    train.loc[1, "price_rub"] = train.loc[1, "distance"] * 1e5        # absurd price per km, not flagged
+    train.loc[1, "price_rub"] = train.loc[1, "distance"] * 1e5        # абсурдная цена за км, без флага выброса
     kept, info = clean_training_target(train)
     assert 0 not in kept.index and 1 not in kept.index
     assert info["train_rows_flagged_outliers"] == 1 and info["train_rows_iqr_removed"] >= 1
