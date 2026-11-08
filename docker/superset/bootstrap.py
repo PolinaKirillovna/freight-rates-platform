@@ -36,6 +36,49 @@ def where_sql(expression: str) -> dict:
             "filterOptionName": f"filter_{uuid.uuid4().hex[:8]}"}
 
 
+def build_query_context(datasource_id: int, viz_type: str, params: dict) -> str:
+    """Собрать query_context графика из его form_data.
+
+    Без сохранённого query_context Superset не умеет отдавать данные графика по API
+    (`GET /api/v1/chart/{id}/data/`), хотя в интерфейсе он рисуется. Здесь мы восстанавливаем
+    тот же запрос, что фронтенд отправляет на /api/v1/chart/data, — этого хватает для проверки
+    дашборда по API и для экспорта.
+    """
+    filters, where_parts = [], []
+    for flt in params.get("adhoc_filters", []):
+        if flt.get("expressionType") == "SIMPLE":
+            filters.append({"col": flt["subject"], "op": flt["operator"], "val": flt["comparator"]})
+        else:
+            where_parts.append("(" + flt["sqlExpression"] + ")")
+
+    query: dict = {"filters": filters, "extras": {"having": "", "where": " AND ".join(where_parts)},
+                   "row_limit": params.get("row_limit", 1000), "order_desc": True,
+                   "annotation_layers": [], "custom_params": {}, "custom_form_data": {}}
+    if viz_type == "big_number_total":
+        query["metrics"] = [params["metric"]]
+    elif viz_type == "pie":
+        query["metrics"] = [params["metric"]]
+        query["columns"] = params.get("groupby", [])
+    elif viz_type in ("echarts_timeseries_line", "echarts_timeseries_bar"):
+        query["metrics"] = params.get("metrics", [])
+        x_axis = params.get("x_axis")
+        axis = ({"columnType": "BASE_AXIS", "label": x_axis, "sqlExpression": x_axis,
+                 "expressionType": "SQL", "timeGrain": params.get("time_grain_sqla")}
+                if params.get("time_grain_sqla") else x_axis)
+        query["columns"] = [axis] + params.get("groupby", [])
+        query["series_columns"] = params.get("groupby", [])
+    elif viz_type == "table" and params.get("query_mode") == "raw":
+        query["columns"] = params.get("all_columns", [])
+        query["metrics"] = None
+    else:  # table в режиме агрегации
+        query["metrics"] = params.get("metrics", [])
+        query["columns"] = params.get("groupby", [])
+
+    context = {"datasource": {"id": datasource_id, "type": "table"}, "force": False,
+               "queries": [query], "form_data": params, "result_format": "json", "result_type": "full"}
+    return json.dumps(context, ensure_ascii=False)
+
+
 # name -> (dataset key, viz_type, form_data without datasource)
 CHARTS: dict[str, tuple[str, str, dict]] = {
     "MAPE модели на тесте, %": ("model_quality", "big_number_total", {
@@ -211,7 +254,9 @@ def main() -> None:
                 db.session.flush()
             params = {**form, "viz_type": viz_type, "datasource": f"{dataset.id}__table"}
             slc = Slice(slice_name=name, viz_type=viz_type, datasource_type="table", datasource_id=dataset.id,
-                        params=json.dumps(params, ensure_ascii=False), owners=[owner] if owner else [])
+                        params=json.dumps(params, ensure_ascii=False),
+                        query_context=build_query_context(dataset.id, viz_type, params),
+                        owners=[owner] if owner else [])
             db.session.add(slc)
             slices[name] = slc
         db.session.commit()
