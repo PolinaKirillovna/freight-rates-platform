@@ -1,4 +1,6 @@
 -- Smoke-проверки хранилища: каждая строка — название проверки и число нарушений (ожидается 0).
+-- Без параллельных воркеров: проверки должны проходить и на машинах со скромным /dev/shm.
+SET max_parallel_workers_per_gather = 0;
 SELECT 'core: deal duplicated inside one body group' AS check_name, count(*) AS violations
 FROM (SELECT price_id, body_group_code FROM core.fact_price_body_group GROUP BY 1, 2 HAVING count(*) > 1) t
 UNION ALL

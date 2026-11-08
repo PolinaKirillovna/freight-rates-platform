@@ -24,6 +24,8 @@ x-pipeline-env: &pipeline-env
 services:
   postgres:
     image: postgres:17
+    # 64 МБ /dev/shm по умолчанию не хватает параллельным hash join на 300 тыс. сделок
+    shm_size: 1gb
     command: >
       postgres -c shared_buffers=512MB -c work_mem=64MB -c maintenance_work_mem=256MB
                -c max_wal_size=2GB -c checkpoint_timeout=15min
