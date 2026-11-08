@@ -105,7 +105,9 @@ services:
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
     ports:
       - "${SUPERSET_PORT_HOST:-8088}:8088"
+    restart: on-failure
     depends_on:
+      postgres: {condition: service_healthy}
       pipeline: {condition: service_completed_successfully}
 
   # Оркестрация по расписанию: docker compose --profile airflow up
