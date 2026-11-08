@@ -256,6 +256,9 @@ docker compose exec airflow airflow dags trigger freight_rates_pipeline \
   --conf '{"start_date": "2023-01-01", "end_date": "2027-12-31"}'
 ```
 
+Чтобы соединения в метабазе Airflow шифровались, задайте `AIRFLOW_FERNET_KEY` в `.env` — команда
+для генерации ключа есть в `.env.example`.
+
 ## Дашборд Superset
 
 Создаётся скриптом [`docker/superset/bootstrap.py`](docker/superset/bootstrap.py) при каждом старте контейнера. Скрипт идемпотентен.
