@@ -14,9 +14,11 @@ from superset.app import create_app
 
 app = create_app()
 
-ROUTE = "Москва → Санкт-Петербург"
-BODY = "Тент"
-WEIGHT = "FTL"
+# Значения по умолчанию для нативных фильтров дашборда (не зашиты в сами графики).
+DEFAULT_ROUTE = "Москва → Санкт-Петербург"
+DEFAULT_BODY = "Тент"
+DEFAULT_WEIGHT = "FTL"
+DEFAULT_RELIABILITY = ["HIGH", "MEDIUM"]
 DASHBOARD_SLUG = "freight-rates"
 
 
@@ -34,8 +36,6 @@ def where_sql(expression: str) -> dict:
             "filterOptionName": f"filter_{uuid.uuid4().hex[:8]}"}
 
 
-ROUTE_FILTERS = [where("route", "==", ROUTE), where("body_group", "==", BODY), where("weight_category", "==", WEIGHT)]
-
 # name -> (dataset key, viz_type, form_data without datasource)
 CHARTS: dict[str, tuple[str, str, dict]] = {
     "MAPE модели на тесте, %": ("model_quality", "big_number_total", {
@@ -52,27 +52,29 @@ CHARTS: dict[str, tuple[str, str, dict]] = {
         "metric": metric("SUM(rows_quarantined)", "Строк"),
         "adhoc_filters": [], "y_axis_format": ",d", "subheader": "записи с кодом причины",
     }),
-    f"Коридор ставок: {ROUTE}, {BODY}, {WEIGHT}": ("route_card", "echarts_timeseries_line", {
+    # Маршрут, кузов и вес не зашиты в график: их задают нативные фильтры дашборда.
+    "Коридор ставок по выбранному маршруту": ("route_card", "echarts_timeseries_line", {
         "x_axis": "month", "time_grain_sqla": "P1M",
         "metrics": [metric("MAX(p25_trip)", "P25, ₽/рейс"), metric("MAX(median_trip)", "Медиана, ₽/рейс"),
                     metric("MAX(p75_trip)", "P75, ₽/рейс")],
-        "groupby": [], "adhoc_filters": ROUTE_FILTERS, "row_limit": 1000,
+        "groupby": [], "adhoc_filters": [], "row_limit": 1000,
         "show_legend": True, "rich_tooltip": True, "y_axis_format": ",.0f", "markerEnabled": True,
     }),
-    f"Медиана ₽/км по группам кузова: {ROUTE}, {WEIGHT}": ("route_card", "echarts_timeseries_line", {
+    "Медиана ₽/км по группам кузова на выбранном маршруте": ("route_card", "echarts_timeseries_line", {
         "x_axis": "month", "time_grain_sqla": "P1M",
         "metrics": [metric("MAX(median_km)", "Медиана, ₽/км")],
         "groupby": ["body_group"],
-        "adhoc_filters": [where("route", "==", ROUTE), where("weight_category", "==", WEIGHT)],
+        "adhoc_filters": [],
         "row_limit": 1000, "show_legend": True, "rich_tooltip": True, "y_axis_format": ",.1f",
     }),
+    # Уровень надёжности выбирается нативным фильтром (по умолчанию HIGH и MEDIUM).
     "Сеть маршрутов за последний месяц": ("route_network", "table", {
         "query_mode": "raw",
         "all_columns": ["route", "body_group", "weight_category", "p25_trip", "median_trip", "p75_trip",
                         "median_km", "trips_count", "carriers_count", "cv_rate", "mom_pct", "yoy_pct",
                         "reliability_level"],
         "order_by_cols": [json.dumps(["trips_count", False])],
-        "adhoc_filters": [where("reliability_level", "IN", ["HIGH", "MEDIUM"])],
+        "adhoc_filters": [],
         "row_limit": 500, "table_timestamp_format": "smart_date", "show_cell_bars": True,
     }),
     "Факт против прогноза (чемпион), средняя ставка по дням": ("predictions", "echarts_timeseries_line", {
@@ -101,11 +103,53 @@ CHARTS: dict[str, tuple[str, str, dict]] = {
 
 LAYOUT = [  # rows of (chart name, width out of 12, height)
     [("MAPE модели на тесте, %", 4, 25), ("R² модели на тесте", 4, 25), ("Сделок в карантине", 4, 25)],
-    [(f"Коридор ставок: {ROUTE}, {BODY}, {WEIGHT}", 6, 60), (f"Медиана ₽/км по группам кузова: {ROUTE}, {WEIGHT}", 6, 60)],
+    [("Коридор ставок по выбранному маршруту", 6, 60), ("Медиана ₽/км по группам кузова на выбранном маршруте", 6, 60)],
     [("Сеть маршрутов за последний месяц", 12, 80)],
     [("Факт против прогноза (чемпион), средняя ставка по дням", 8, 60), ("Важность признаков CatBoost", 4, 60)],
     [("Причины отбраковки", 4, 55), ("ClickHouse: самые плотные направления последнего месяца", 8, 55)],
 ]
+
+# Нативные фильтры: имя -> (столбец, график-источник значений, графики в зоне действия,
+# значения по умолчанию, обязателен ли выбор). Зона действия задаётся именами графиков.
+DETAIL_CHARTS = ["Коридор ставок по выбранному маршруту", "Медиана ₽/км по группам кузова на выбранном маршруте"]
+NETWORK_CHART = "Сеть маршрутов за последний месяц"
+FILTERS = [
+    # Маршрут управляет только карточкой: сводная таблица должна показывать всю сеть.
+    ("Маршрут", "route", "route_card", DETAIL_CHARTS, [DEFAULT_ROUTE], True),
+    # Кузов не применяется к графику-сравнению групп кузова.
+    ("Группа кузова", "body_group", "route_card",
+     ["Коридор ставок по выбранному маршруту", NETWORK_CHART], [DEFAULT_BODY], False),
+    ("Весовая категория", "weight_category", "route_card", DETAIL_CHARTS + [NETWORK_CHART], [DEFAULT_WEIGHT], False),
+    # Месяцы — диапазон дат; столбец не нужен: применяется к оси времени графиков карточки.
+    ("Месяцы", None, "route_card", DETAIL_CHARTS, None, False),
+    ("Уровень надёжности", "reliability_level", "route_network", [NETWORK_CHART], DEFAULT_RELIABILITY, False),
+]
+
+
+def native_filter(name: str, column: str | None, dataset_id: int, charts_in_scope: list[int],
+                  excluded: list[int], default: list | None, required: bool) -> dict:
+    conf = {
+        "id": f"NATIVE_FILTER-{column or 'time-range'}",
+        "name": name,
+        "filterType": "filter_select" if column else "filter_time",
+        "type": "NATIVE_FILTER",
+        "description": "",
+        "targets": [{"column": {"name": column}, "datasetId": dataset_id}] if column else [{}],
+        "controlValues": {"enableEmptyFilter": required, "defaultToFirstItem": False,
+                          "multiSelect": True, "searchAllOptions": False, "inverseSelection": False}
+        if column else {},
+        "cascadeParentIds": [],
+        "scope": {"rootPath": ["ROOT_ID"], "excluded": excluded},
+        "chartsInScope": charts_in_scope,
+        "tabsInScope": [],
+        "defaultDataMask": {"extraFormData": {}, "filterState": {}},
+    }
+    if default:
+        conf["defaultDataMask"] = {
+            "extraFormData": {"filters": [{"col": column, "op": "IN", "val": default}]},
+            "filterState": {"value": default, "label": ", ".join(map(str, default))},
+        }
+    return conf
 
 
 def main() -> None:
@@ -194,11 +238,22 @@ def main() -> None:
                 }
                 position[row_id]["children"].append(chart_id)
 
+        all_chart_ids = {s.id for s in slices.values()}
+        filter_configuration = []
+        for name, column, dataset_key, scope_names, default, required in FILTERS:
+            if datasets.get(dataset_key) is None:
+                continue
+            in_scope = [slices[c].id for c in scope_names if c in slices]
+            filter_configuration.append(native_filter(
+                name, column, datasets[dataset_key].id, in_scope,
+                sorted(all_chart_ids - set(in_scope)), default, required))
+
         dash = db.session.query(Dashboard).filter_by(slug=DASHBOARD_SLUG).first() or Dashboard(slug=DASHBOARD_SLUG)
         dash.dashboard_title = "Рынок грузовых ставок"
         dash.position_json = json.dumps(position, ensure_ascii=False)
         dash.json_metadata = json.dumps({"color_scheme": "supersetColors", "refresh_frequency": 0,
-                                         "native_filter_configuration": []})
+                                         "native_filter_configuration": filter_configuration},
+                                        ensure_ascii=False)
         dash.slices = list(slices.values())
         dash.owners = [owner] if owner else []
         dash.published = True
