@@ -1,0 +1,56 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: pip}
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: pytest -q
+
+  pipeline-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: {POSTGRES_PASSWORD: postgres}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      POSTGRES_HOST: localhost
+      SOURCE_DB_USER: source_reader
+      SOURCE_DB_PASSWORD: source_reader
+      DWH_DB_USER: dwh
+      DWH_DB_PASSWORD: dwh
+      CLICKHOUSE_ENABLED: "false"
+      ARTIFACTS_DIR: /tmp/artifacts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: pip}
+      - run: pip install -r requirements-dev.txt
+      - name: Source database (reduced volume)
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "CREATE ROLE source_reader LOGIN PASSWORD 'source_reader'" \
+               -c "CREATE ROLE dwh LOGIN PASSWORD 'dwh'" -c "CREATE ROLE bi_reader LOGIN PASSWORD 'bi_reader'" \
+               -c "CREATE DATABASE deals_bigdata" -c "CREATE DATABASE dwh OWNER dwh"
+          psql -v ON_ERROR_STOP=1 -d deals_bigdata -q -f sql/source/schema.sql
+          psql -v ON_ERROR_STOP=1 -d deals_bigdata -q -v n_prices=60000 -f sql/source/synthetic.sql > /dev/null
+          psql -v ON_ERROR_STOP=1 -d deals_bigdata -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO source_reader"
+      - name: Full pipeline
+        run: python -m etl.cli all
+      - name: Integration tests (idempotency, smoke checks, ClickHouse parity on chdb)
+        run: RUN_INTEGRATION=1 pytest -q
+      - name: Model metrics
+        run: cat /tmp/artifacts/ml/metrics.md >> "$GITHUB_STEP_SUMMARY"

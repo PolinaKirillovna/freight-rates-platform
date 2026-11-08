@@ -1,0 +1,135 @@
+name: freight-rates
+
+x-pipeline-env: &pipeline-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  SOURCE_DB_USER: ${SOURCE_DB_USER:-source_reader}
+  SOURCE_DB_PASSWORD: ${SOURCE_DB_PASSWORD:-change-me-source}
+  DWH_DB_USER: ${DWH_DB_USER:-dwh}
+  DWH_DB_PASSWORD: ${DWH_DB_PASSWORD:-change-me-dwh}
+  CLICKHOUSE_ENABLED: ${CLICKHOUSE_ENABLED:-true}
+  CLICKHOUSE_HOST: clickhouse
+  CLICKHOUSE_HTTP_PORT: "8123"
+  CLICKHOUSE_USER: ${CLICKHOUSE_USER:-freight}
+  CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
+  CLICKHOUSE_DB: ${CLICKHOUSE_DB:-freight}
+  AS_OF_DATE: ${AS_OF_DATE:-2026-10-26}
+  PIPELINE_START_DATE: ${PIPELINE_START_DATE:-2023-01-01}
+  PIPELINE_END_DATE: ${PIPELINE_END_DATE:-2027-12-31}
+  PIPELINE_LOOKBACK_DAYS: ${PIPELINE_LOOKBACK_DAYS:-14}
+  PIPELINE_FORWARD_DAYS: ${PIPELINE_FORWARD_DAYS:-150}
+  RANDOM_SEED: ${RANDOM_SEED:-42}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+services:
+  postgres:
+    image: postgres:17
+    command: >
+      postgres -c shared_buffers=512MB -c work_mem=64MB -c maintenance_work_mem=256MB
+               -c max_wal_size=2GB -c checkpoint_timeout=15min
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:-change-me-postgres}
+      SOURCE_N_PRICES: ${SOURCE_N_PRICES:-300000}
+      SOURCE_DB_USER: ${SOURCE_DB_USER:-source_reader}
+      SOURCE_DB_PASSWORD: ${SOURCE_DB_PASSWORD:-change-me-source}
+      DWH_DB_USER: ${DWH_DB_USER:-dwh}
+      DWH_DB_PASSWORD: ${DWH_DB_PASSWORD:-change-me-dwh}
+      BI_DB_USER: ${BI_DB_USER:-bi_reader}
+      BI_DB_PASSWORD: ${BI_DB_PASSWORD:-change-me-bi}
+      AIRFLOW_DB_USER: ${AIRFLOW_DB_USER:-airflow}
+      AIRFLOW_DB_PASSWORD: ${AIRFLOW_DB_PASSWORD:-change-me-airflow-db}
+      SUPERSET_DB_USER: ${SUPERSET_DB_USER:-superset}
+      SUPERSET_DB_PASSWORD: ${SUPERSET_DB_PASSWORD:-change-me-superset-db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/01-init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+      - ./sql/source:/source:ro
+    ports:
+      - "${POSTGRES_PORT_HOST:-5432}:5432"
+    healthcheck:
+      # Во время первичной инициализации сервер слушает только сокет, поэтому TCP-проверка
+      # проходит лишь после генерации данных источника.
+      test: ["CMD-SHELL", "psql -h 127.0.0.1 -U $${POSTGRES_USER} -d deals_bigdata -tAc 'SELECT 1 FROM prices LIMIT 1' | grep -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 300s
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-freight}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-freight}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ulimits:
+      nofile: {soft: 262144, hard: 262144}
+    volumes:
+      - chdata:/var/lib/clickhouse
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT_HOST:-8123}:8123"
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user $${CLICKHOUSE_USER:-freight} --password $${CLICKHOUSE_PASSWORD:-change-me-clickhouse} -q 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Одноразовый запуск полного конвейера: ETL -> витрины -> ClickHouse -> обучение и скоринг.
+  pipeline:
+    build:
+      context: .
+      dockerfile: docker/pipeline/Dockerfile
+    environment: *pipeline-env
+    command: ["python", "-m", "etl.cli", "all"]
+    volumes:
+      - artifacts:/app/artifacts
+    depends_on:
+      postgres: {condition: service_healthy}
+      clickhouse: {condition: service_healthy}
+    restart: "no"
+
+  superset:
+    build:
+      context: .
+      dockerfile: docker/superset/Dockerfile
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-change-me-to-a-long-random-string}
+      SUPERSET_METADATA_URI: postgresql+psycopg2://${SUPERSET_DB_USER:-superset}:${SUPERSET_DB_PASSWORD:-change-me-superset-db}@postgres:5432/superset
+      SUPERSET_DWH_URI: postgresql+psycopg2://${BI_DB_USER:-bi_reader}:${BI_DB_PASSWORD:-change-me-bi}@postgres:5432/dwh
+      SUPERSET_CLICKHOUSE_URI: clickhousedb://${CLICKHOUSE_USER:-freight}:${CLICKHOUSE_PASSWORD:-change-me-clickhouse}@clickhouse:8123/${CLICKHOUSE_DB:-freight}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-freight}
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER:-admin}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
+    ports:
+      - "${SUPERSET_PORT_HOST:-8088}:8088"
+    depends_on:
+      pipeline: {condition: service_completed_successfully}
+
+  # Оркестрация по расписанию: docker compose --profile airflow up
+  airflow:
+    profiles: ["airflow"]
+    build:
+      context: .
+      dockerfile: docker/airflow/Dockerfile
+    environment:
+      <<: *pipeline-env
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER:-airflow}:${AIRFLOW_DB_PASSWORD:-change-me-airflow-db}@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
+      AIRFLOW_ADMIN_USER: ${AIRFLOW_ADMIN_USER:-admin}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
+      ARTIFACTS_DIR: /opt/airflow/artifacts
+    ports:
+      - "${AIRFLOW_PORT_HOST:-8080}:8080"
+    depends_on:
+      postgres: {condition: service_healthy}
+      clickhouse: {condition: service_healthy}
+
+volumes:
+  pgdata:
+  chdata:
+  artifacts:

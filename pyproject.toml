@@ -1,0 +1,18 @@
+[project]
+name = "freight-rates-platform"
+version = "1.0.0"
+description = "Freight rate analytics and forecasting platform: ETL, data quality, marts, ClickHouse, ML batch scoring"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs a live warehouse (RUN_INTEGRATION=1)"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["UP038", "B905"]
