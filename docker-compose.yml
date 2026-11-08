@@ -23,7 +23,7 @@ x-pipeline-env: &pipeline-env
 
 services:
   postgres:
-    image: postgres:17
+    image: postgres:17.6
     # 64 МБ /dev/shm по умолчанию не хватает параллельным hash join на 300 тыс. сделок
     shm_size: 1gb
     command: >
@@ -60,7 +60,7 @@ services:
       start_period: 300s
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8
+    image: clickhouse/clickhouse-server:24.8.14.39
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-freight}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-freight}
