@@ -135,14 +135,32 @@ CHARTS: dict[str, tuple[str, str, dict]] = {
         "groupby": ["reason_code"], "metric": metric("SUM(rows_quarantined)", "Строк"),
         "adhoc_filters": [], "show_legend": True, "label_type": "key_value", "row_limit": 100,
     }),
-    "ClickHouse: самые плотные направления последнего месяца": ("ch_route_card", "table", {
-        "query_mode": "aggregate", "groupby": ["route"],
-        "metrics": [metric("SUM(trips_count)", "Рейсов"), metric("SUM(carriers_count)", "Перевозчиков (по ячейкам)"),
-                    metric("avg(median_km)", "Средняя медиана, ₽/км")],
-        "adhoc_filters": [where_sql("month = toStartOfMonth(as_of)")],
-        "row_limit": 15, "order_desc": True, "timeseries_limit_metric": metric("SUM(trips_count)", "Рейсов"),
+    # Перевозчики считаются по сырым строкам (uniqExactIf), а не суммой по ячейкам:
+    # перевозчик на нескольких группах кузова одного маршрута учитывается один раз.
+    "ClickHouse: самые плотные направления последнего месяца": ("ch_route_dense", "table", {
+        "query_mode": "raw",
+        "all_columns": ["route", "trips_count", "carriers_count", "median_km"],
+        "order_by_cols": [json.dumps(["trips_count", False])],
+        "adhoc_filters": [], "row_limit": 15, "table_timestamp_format": "smart_date",
     }),
 }
+
+# Виртуальный набор данных ClickHouse: уникальные рейсы и перевозчики на маршрут за месяц снимка.
+CH_DENSE_ROUTES_SQL = """
+SELECT concat(lc.city_name, ' → ', uc.city_name)                   AS route,
+       uniqExact(f.price_id)                                       AS trips_count,
+       uniqExactIf(f.organization_id, f.price_type IN (3, 9))      AS carriers_count,
+       round(median(f.price_rub_per_km), 1)                        AS median_km
+FROM {db}.fact_market_rows AS f FINAL
+CROSS JOIN (SELECT max(as_of) AS as_of FROM {db}.snapshot) AS s
+LEFT JOIN {db}.dim_city AS lc ON lc.gc_id = f.loading_city_gcid
+LEFT JOIN {db}.dim_city AS uc ON uc.gc_id = f.unloading_city_gcid
+WHERE f.is_fact AND f.price_type IN (1, 2, 3, 4, 5, 9) AND NOT f.complex AND NOT f.outlier_mark
+  AND f.price_original > 0 AND f.distance > 0
+  AND toStartOfMonth(f.price_date) = toStartOfMonth(s.as_of)
+GROUP BY route
+ORDER BY trips_count DESC
+"""
 
 LAYOUT = [  # rows of (chart name, width out of 12, height)
     [("MAPE модели на тесте, %", 4, 25), ("R² модели на тесте", 4, 25), ("Сделок в карантине", 4, 25)],
@@ -214,12 +232,14 @@ def main() -> None:
             db.session.commit()
             return database
 
-        def get_dataset(database: Database, schema: str, table: str, dttm: str | None) -> SqlaTable | None:
+        def get_dataset(database: Database, schema: str, table: str, dttm: str | None,
+                        sql: str | None = None) -> SqlaTable | None:
             dataset = db.session.query(SqlaTable).filter_by(table_name=table, schema=schema, database_id=database.id).first()
             if dataset is None:
                 dataset = SqlaTable(table_name=table, schema=schema, database=database)
                 db.session.add(dataset)
             dataset.main_dttm_col = dttm
+            dataset.sql = sql           # непусто — это виртуальный набор данных поверх SQL
             dataset.owners = [owner] if owner else []
             try:
                 dataset.fetch_metadata()
@@ -241,7 +261,9 @@ def main() -> None:
         }
         if os.environ.get("SUPERSET_CLICKHOUSE_URI"):
             ch = get_database("Аналитика ClickHouse", os.environ["SUPERSET_CLICKHOUSE_URI"])
-            datasets["ch_route_card"] = get_dataset(ch, os.environ.get("CLICKHOUSE_DB", "freight"), "route_card", "month")
+            ch_db = os.environ.get("CLICKHOUSE_DB", "freight")
+            datasets["ch_route_dense"] = get_dataset(
+                ch, ch_db, "ch_dense_routes", None, sql=CH_DENSE_ROUTES_SQL.format(db=ch_db))
 
         slices: dict[str, Slice] = {}
         for name, (key, viz_type, form) in CHARTS.items():
