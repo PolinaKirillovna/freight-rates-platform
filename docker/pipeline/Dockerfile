@@ -12,6 +12,7 @@ RUN pip install -r requirements-dev.txt
 COPY common ./common
 COPY etl ./etl
 COPY ml ./ml
+COPY configs ./configs
 COPY sql ./sql
 COPY tests ./tests
 COPY pyproject.toml ./

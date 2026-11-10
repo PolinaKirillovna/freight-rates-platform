@@ -5,7 +5,7 @@ and is fitted on the training split only.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -23,15 +23,7 @@ from ml.features import CATEGORICAL_FEATURES, NUMERIC_FEATURES
 @dataclass
 class CatBoostModel:
     seed: int
-    params: dict = field(default_factory=lambda: {
-        "loss_function": "RMSE",
-        "learning_rate": 0.06,
-        "depth": 8,
-        "l2_leaf_reg": 3.0,
-        "iterations": 3000,
-        "od_type": "Iter",
-        "od_wait": 200,
-    })
+    params: dict          # hyperparameters come from configs/ml.yaml (see ml.config)
     name: str = "catboost"
     model: CatBoostRegressor | None = None
     best_iterations: int | None = None
@@ -88,18 +80,18 @@ class SklearnModel:
         return {"estimator": repr(self.pipeline.named_steps["model"])}
 
 
-def ridge_baseline(seed: int) -> SklearnModel:
+def ridge_baseline(seed: int, params: dict) -> SklearnModel:
     prep = ColumnTransformer([
         ("num", Pipeline([("impute", SimpleImputer(strategy="median")), ("scale", StandardScaler())]), NUMERIC_FEATURES),
         ("cat", OneHotEncoder(handle_unknown="ignore", min_frequency=20), CATEGORICAL_FEATURES),
     ])
-    return SklearnModel("ridge", Pipeline([("prep", prep), ("model", Ridge(alpha=1.0, random_state=seed))]))
+    return SklearnModel("ridge", Pipeline([("prep", prep), ("model", Ridge(**params, random_state=seed))]))
 
 
-def tree_baseline(seed: int) -> SklearnModel:
+def tree_baseline(seed: int, params: dict) -> SklearnModel:
     prep = ColumnTransformer([
         ("num", SimpleImputer(strategy="median"), NUMERIC_FEATURES),
         ("cat", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), CATEGORICAL_FEATURES),
     ])
-    tree = DecisionTreeRegressor(max_depth=14, min_samples_leaf=15, random_state=seed)
+    tree = DecisionTreeRegressor(**params, random_state=seed)
     return SklearnModel("decision_tree", Pipeline([("prep", prep), ("model", tree)]))

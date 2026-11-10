@@ -14,6 +14,7 @@ import pandas as pd
 from common.config import Settings
 from common.db import connect, copy_df
 from common.logging import get_logger
+from ml.config import load_ml_config
 from ml.dataset import load_dataset
 from ml.features import FEATURES, TARGET, build_features
 from ml.metrics import regression_report
@@ -22,9 +23,6 @@ from ml.split import TimeSplit
 
 log = get_logger(__name__)
 
-VALIDATION_DAYS = 14          # tail of train used only for CatBoost early stopping
-IQR_K = 3.0                   # train-only fence on ln(price per km)
-
 PREDICTION_COLUMNS = [
     "price_id", "model_name", "split", "loading_date", "loading_city_gcid", "unloading_city_gcid", "body_group",
     "weight_category", "distance", "outlier_mark", "actual_price_rub", "predicted_price_rub", "abs_error_rub",
@@ -32,7 +30,7 @@ PREDICTION_COLUMNS = [
 ]
 
 
-def clean_training_target(train: pd.DataFrame, k: float = IQR_K) -> tuple[pd.DataFrame, dict]:
+def clean_training_target(train: pd.DataFrame, k: float = 3.0) -> tuple[pd.DataFrame, dict]:
     """Drop flagged outliers, then apply an IQR fence on ln(price/km) computed on train only."""
     unflagged = train[~train["outlier_mark"]]
     log_km = np.log(unflagged[TARGET] / unflagged["distance"])
@@ -48,24 +46,27 @@ def clean_training_target(train: pd.DataFrame, k: float = IQR_K) -> tuple[pd.Dat
 
 
 def train_and_score(settings: Settings) -> dict:
-    split = TimeSplit.from_as_of(settings.as_of)
+    cfg = load_ml_config()
+    split = TimeSplit.from_as_of(settings.as_of, train_months=cfg.train_months, test_weeks=cfg.test_weeks)
     run_id = uuid.uuid4()
     with connect(settings.dwh) as conn:
         data = load_dataset(conn, split.train_start)
 
     masks = split.masks(data["loading_date"])
     train_raw, test, future = data[masks["train"]], data[masks["test"]], data[masks["future"]]
-    train, cleaning = clean_training_target(train_raw)
+    train, cleaning = clean_training_target(train_raw, k=cfg.iqr_k)
     test_clean = test[~test["outlier_mark"]]
     log.info("dataset split", extra={**split.as_dict(), **cleaning, "test_rows": len(test),
                                      "test_rows_clean": len(test_clean), "future_rows": len(future)})
 
     X_train, y_train = build_features(train), train[TARGET]
-    val_start = pd.Timestamp(split.train_end - timedelta(days=VALIDATION_DAYS))
+    val_start = pd.Timestamp(split.train_end - timedelta(days=cfg.validation_days))
     val_mask = train["loading_date"] >= val_start
     X_val, y_val = X_train[val_mask.to_numpy()], y_train[val_mask.to_numpy()]
 
-    models = [CatBoostModel(seed=settings.random_seed), ridge_baseline(settings.random_seed), tree_baseline(settings.random_seed)]
+    models = [CatBoostModel(seed=settings.random_seed, params=cfg.catboost),
+              ridge_baseline(settings.random_seed, cfg.ridge),
+              tree_baseline(settings.random_seed, cfg.decision_tree)]
     X_test, X_test_clean, X_future = build_features(test), build_features(test_clean), build_features(future)
 
     metrics_rows, importance_rows, results = [], [], {}
@@ -92,7 +93,7 @@ def train_and_score(settings: Settings) -> dict:
     )
 
     params = {"split": split.as_dict(), "cleaning": cleaning, "features": FEATURES,
-              "validation_days": VALIDATION_DAYS, "models": {m.name: m.describe() for m in models}}
+              "validation_days": cfg.validation_days, "models": {m.name: m.describe() for m in models}}
     with connect(settings.dwh) as conn:
         conn.execute(
             "INSERT INTO ml.model_runs (run_id, trained_at, as_of, train_start, train_end_excl, test_start, test_end_incl, "

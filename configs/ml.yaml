@@ -1,0 +1,26 @@
+# Hyperparameters for the ML training run (ml/train.py).
+# This file is the single source of truth; a snapshot is stored in ml.model_runs.params on every run.
+# Override the path with the ML_CONFIG environment variable.
+
+split:
+  train_months: 3        # length of the training window
+  test_weeks: 3          # length of the test window ending at the snapshot date
+  validation_days: 14    # tail of train used only for CatBoost early stopping
+
+cleaning:
+  iqr_k: 3.0             # train-only IQR fence multiplier on ln(price per km)
+
+models:
+  catboost:
+    loss_function: RMSE
+    learning_rate: 0.06
+    depth: 8
+    l2_leaf_reg: 3.0
+    iterations: 3000
+    od_type: Iter
+    od_wait: 200
+  ridge:
+    alpha: 1.0
+  decision_tree:
+    max_depth: 14
+    min_samples_leaf: 15
