@@ -13,7 +13,7 @@ jobs:
         with: {python-version: "3.11", cache: pip}
       - run: pip install -r requirements-dev.txt
       - run: ruff check .
-      - run: pytest -q
+      - run: pytest -q --cov=etl --cov=ml --cov=common --cov-report=term
 
   pipeline-integration:
     runs-on: ubuntu-latest
