@@ -21,24 +21,38 @@ class MLConfig:
     test_weeks: int
     validation_days: int
     iqr_k: float
-    catboost: dict
+    catboost: dict           # только гиперпараметры оценщика (без target_transform)
     ridge: dict
     decision_tree: dict
+    target_transforms: dict   # {имя модели: "log" | "none"}
 
     @classmethod
     def from_mapping(cls, raw: dict) -> MLConfig:
         split = _require(raw, "split")
         cleaning = _require(raw, "cleaning")
         models = _require(raw, "models")
+        cb_params, cb_t = _split_model(models, "catboost")
+        rg_params, rg_t = _split_model(models, "ridge")
+        dt_params, dt_t = _split_model(models, "decision_tree")
         return cls(
             train_months=_require(split, "train_months"),
             test_weeks=_require(split, "test_weeks"),
             validation_days=_require(split, "validation_days"),
             iqr_k=float(_require(cleaning, "iqr_k")),
-            catboost=_require(models, "catboost"),
-            ridge=_require(models, "ridge"),
-            decision_tree=_require(models, "decision_tree"),
+            catboost=cb_params,
+            ridge=rg_params,
+            decision_tree=dt_params,
+            target_transforms={"catboost": cb_t, "ridge": rg_t, "decision_tree": dt_t},
         )
+
+
+def _split_model(models: dict, name: str) -> tuple[dict, str]:
+    """Отделить target_transform от гиперпараметров оценщика для одной модели."""
+    section = dict(_require(models, name))
+    if "target_transform" not in section:
+        raise ValueError(f"ml config: missing required key 'target_transform' in models.{name}")
+    transform = section.pop("target_transform")
+    return section, transform
 
 
 def _require(mapping: dict, key: str):

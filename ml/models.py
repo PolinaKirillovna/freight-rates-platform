@@ -22,16 +22,34 @@ from ml.features import CATEGORICAL_FEATURES, NUMERIC_FEATURES
 
 
 class RegressionModel(ABC):
-    """Общий интерфейс моделей цены: обучение на train, предсказание, важность признаков, описание."""
+    """Общий интерфейс моделей цены: обучение на train, предсказание, важность признаков, описание.
+
+    Шаблонные методы fit/predict применяют target_transform: при "log" модель учится на np.log(y),
+    а прогноз возвращается в рублях как np.exp(predict). Метрики всегда считаются в рублях.
+    """
 
     name: str
+    target_transform: str = "none"
+
+    def fit(self, X: pd.DataFrame, y: pd.Series, X_val: pd.DataFrame, y_val: pd.Series) -> RegressionModel:
+        self._fit(X, self._encode(y), X_val, self._encode(y_val))
+        return self
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        return self._decode(self._predict(X))
+
+    def _encode(self, y: pd.Series) -> pd.Series:
+        return np.log(y) if self.target_transform == "log" else y
+
+    def _decode(self, pred: np.ndarray) -> np.ndarray:
+        return np.exp(pred) if self.target_transform == "log" else pred
 
     @abstractmethod
-    def fit(self, X: pd.DataFrame, y: pd.Series, X_val: pd.DataFrame, y_val: pd.Series) -> RegressionModel:
+    def _fit(self, X: pd.DataFrame, y: pd.Series, X_val: pd.DataFrame, y_val: pd.Series) -> None:
         ...
 
     @abstractmethod
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def _predict(self, X: pd.DataFrame) -> np.ndarray:
         ...
 
     @abstractmethod
@@ -47,11 +65,12 @@ class RegressionModel(ABC):
 class CatBoostModel(RegressionModel):
     seed: int
     params: dict          # гиперпараметры берутся из configs/ml.yaml (см. ml.config)
+    target_transform: str = "none"
     name: str = "catboost"
     model: CatBoostRegressor | None = None
     best_iterations: int | None = None
 
-    def fit(self, X: pd.DataFrame, y: pd.Series, X_val: pd.DataFrame, y_val: pd.Series) -> CatBoostModel:
+    def _fit(self, X: pd.DataFrame, y: pd.Series, X_val: pd.DataFrame, y_val: pd.Series) -> None:
         cat_idx = [X.columns.get_loc(c) for c in CATEGORICAL_FEATURES]
         # 1) ранняя остановка на последних неделях train (валидация строго после обучающей части)
         probe = CatBoostRegressor(**self.params, random_seed=self.seed, verbose=False, allow_writing_files=False)
@@ -64,28 +83,28 @@ class CatBoostModel(RegressionModel):
         final_params["iterations"] = self.best_iterations
         self.model = CatBoostRegressor(**final_params, random_seed=self.seed, verbose=False, allow_writing_files=False)
         self.model.fit(Pool(X, y, cat_features=cat_idx))
-        return self
 
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def _predict(self, X: pd.DataFrame) -> np.ndarray:
         return self.model.predict(X)
 
     def feature_importance(self, columns) -> dict[str, float]:
         return dict(zip(columns, self.model.get_feature_importance(), strict=False))
 
     def describe(self) -> dict:
-        return {**self.params, "best_iterations": self.best_iterations, "random_seed": self.seed}
+        return {**self.params, "target_transform": self.target_transform,
+                "best_iterations": self.best_iterations, "random_seed": self.seed}
 
 
 @dataclass
 class SklearnModel(RegressionModel):
     name: str
     pipeline: Pipeline
+    target_transform: str = "none"
 
-    def fit(self, X: pd.DataFrame, y: pd.Series, *_ignored) -> SklearnModel:
+    def _fit(self, X: pd.DataFrame, y: pd.Series, *_ignored) -> None:
         self.pipeline.fit(X, y)
-        return self
 
-    def predict(self, X: pd.DataFrame) -> np.ndarray:
+    def _predict(self, X: pd.DataFrame) -> np.ndarray:
         return self.pipeline.predict(X)
 
     def feature_importance(self, columns) -> dict[str, float]:
@@ -100,21 +119,21 @@ class SklearnModel(RegressionModel):
         return totals
 
     def describe(self) -> dict:
-        return {"estimator": repr(self.pipeline.named_steps["model"])}
+        return {"estimator": repr(self.pipeline.named_steps["model"]), "target_transform": self.target_transform}
 
 
-def ridge_baseline(seed: int, params: dict) -> SklearnModel:
+def ridge_baseline(seed: int, params: dict, target_transform: str = "none") -> SklearnModel:
     prep = ColumnTransformer([
         ("num", Pipeline([("impute", SimpleImputer(strategy="median")), ("scale", StandardScaler())]), NUMERIC_FEATURES),
         ("cat", OneHotEncoder(handle_unknown="ignore", min_frequency=20), CATEGORICAL_FEATURES),
     ])
-    return SklearnModel("ridge", Pipeline([("prep", prep), ("model", Ridge(**params, random_state=seed))]))
+    return SklearnModel("ridge", Pipeline([("prep", prep), ("model", Ridge(**params, random_state=seed))]), target_transform)
 
 
-def tree_baseline(seed: int, params: dict) -> SklearnModel:
+def tree_baseline(seed: int, params: dict, target_transform: str = "none") -> SklearnModel:
     prep = ColumnTransformer([
         ("num", SimpleImputer(strategy="median"), NUMERIC_FEATURES),
         ("cat", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), CATEGORICAL_FEATURES),
     ])
     tree = DecisionTreeRegressor(**params, random_state=seed)
-    return SklearnModel("decision_tree", Pipeline([("prep", prep), ("model", tree)]))
+    return SklearnModel("decision_tree", Pipeline([("prep", prep), ("model", tree)]), target_transform)

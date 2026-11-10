@@ -4,8 +4,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ml.features import FEATURES, FORBIDDEN_FEATURES, add_calendar_features, assert_no_leakage, build_features
+from ml.features import FEATURES, FORBIDDEN_FEATURES, TARGET, add_calendar_features, assert_no_leakage, build_features
 from ml.metrics import regression_report
+from ml.models import tree_baseline
 from ml.split import TimeSplit
 from ml.train import clean_training_target
 
@@ -78,3 +79,14 @@ def test_regression_report():
     assert r["mape_pct"] == pytest.approx((10 + 5 + 0) / 3)
     assert r["rmse_rub"] == pytest.approx(np.sqrt(200 / 3))
     assert r["r2"] == pytest.approx(1 - 200 / 20000)
+
+
+def test_log_target_model_predicts_rubles_not_logs():
+    df = _sample(60)
+    X, y = build_features(df), df[TARGET]
+    model = tree_baseline(seed=0, params={"max_depth": 3}, target_transform="log")
+    model.fit(X, y, X, y)
+    pred = model.predict(X)
+    assert pred.min() > 1000                                    # рубли, а не логарифмы (~10)
+    assert np.exp(model._predict(X)) == pytest.approx(pred)      # прогноз — экспонента обучения на ln(y)
+    assert model._predict(X).max() < 20                         # внутренняя шкала — логарифмическая
