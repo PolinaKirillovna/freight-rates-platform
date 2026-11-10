@@ -5,6 +5,7 @@ and is fitted on the training split only.
 """
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
@@ -20,8 +21,30 @@ from sklearn.tree import DecisionTreeRegressor
 from ml.features import CATEGORICAL_FEATURES, NUMERIC_FEATURES
 
 
+class RegressionModel(ABC):
+    """Common interface for the price models: fit on train, predict, explain, describe."""
+
+    name: str
+
+    @abstractmethod
+    def fit(self, X: pd.DataFrame, y: pd.Series, X_val: pd.DataFrame, y_val: pd.Series) -> RegressionModel:
+        ...
+
+    @abstractmethod
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        ...
+
+    @abstractmethod
+    def feature_importance(self, columns) -> dict[str, float]:
+        ...
+
+    @abstractmethod
+    def describe(self) -> dict:
+        ...
+
+
 @dataclass
-class CatBoostModel:
+class CatBoostModel(RegressionModel):
     seed: int
     params: dict          # hyperparameters come from configs/ml.yaml (see ml.config)
     name: str = "catboost"
@@ -54,7 +77,7 @@ class CatBoostModel:
 
 
 @dataclass
-class SklearnModel:
+class SklearnModel(RegressionModel):
     name: str
     pipeline: Pipeline
 
