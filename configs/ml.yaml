@@ -1,0 +1,26 @@
+# Гиперпараметры прогона обучения ML (ml/train.py).
+# Этот файл — единственный источник истины; снимок кладётся в ml.model_runs.params на каждом запуске.
+# Путь переопределяется переменной окружения ML_CONFIG.
+
+split:
+  train_months: 3        # длина обучающего окна
+  test_weeks: 3          # длина тестового окна, заканчивается датой снимка
+  validation_days: 14    # хвост train только для ранней остановки CatBoost
+
+cleaning:
+  iqr_k: 3.0             # множитель порога IQR по ln(цена за км), считается только на train
+
+models:
+  catboost:
+    loss_function: RMSE
+    learning_rate: 0.06
+    depth: 8
+    l2_leaf_reg: 3.0
+    iterations: 3000
+    od_type: Iter
+    od_wait: 200
+  ridge:
+    alpha: 1.0
+  decision_tree:
+    max_depth: 14
+    min_samples_leaf: 15
