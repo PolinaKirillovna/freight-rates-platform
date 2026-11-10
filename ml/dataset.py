@@ -1,4 +1,4 @@
-"""Training/scoring dataset from the core layer."""
+"""Набор данных для обучения и скоринга из слоя core."""
 from __future__ import annotations
 
 from datetime import date
@@ -30,7 +30,7 @@ SELECT f.price_id,
        uc.latitude    AS dest_lat,
        uc.longitude   AS dest_lon
 FROM core.fact_price f
-JOIN core.dim_city lc       ON lc.gc_id = f.loading_city_gcid      -- dim_city is already deduplicated by gc_id
+JOIN core.dim_city lc       ON lc.gc_id = f.loading_city_gcid      -- dim_city уже без дублей по gc_id
 JOIN core.dim_city uc       ON uc.gc_id = f.unloading_city_gcid
 JOIN core.dim_body_group g  ON g.body_group_code = f.primary_body_group_code
 WHERE f.is_fact

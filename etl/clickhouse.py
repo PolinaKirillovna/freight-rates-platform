@@ -1,8 +1,8 @@
-"""ClickHouse analytical layer (MergeTree): sync core rows, compute the route card in ClickHouse,
-and check parity with the PostgreSQL mart.
+"""Аналитический слой ClickHouse (MergeTree): синхронизировать строки core, посчитать карточку
+маршрута средствами ClickHouse и сверить результат с витриной PostgreSQL.
 
-Idempotency: every dirty month is a partition. A sync drops the month's partitions and inserts
-them again; ReplacingMergeTree(_version) + FINAL also absorbs a retried insert.
+Идемпотентность: каждый грязный месяц — это секция. Синхронизация удаляет секции месяца и
+вставляет их заново; ReplacingMergeTree(_version) + FINAL дополнительно поглощает повторную вставку.
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ class ClickHouseExecutor(Protocol):
 
 
 class ConnectExecutor:
-    """Production executor on top of clickhouse-connect (HTTP interface)."""
+    """Рабочий исполнитель поверх clickhouse-connect (интерфейс HTTP)."""
 
     def __init__(self, settings: Settings):
         import clickhouse_connect
@@ -95,7 +95,7 @@ def sync_clickhouse(settings: Settings, full_refresh: bool = False, ch: ClickHou
         cities = fetch_df(conn, "SELECT gc_id, city_name, region_name, latitude, longitude FROM core.dim_city ORDER BY gc_id")
         groups = fetch_df(conn, "SELECT body_group_code, body_group FROM core.dim_body_group ORDER BY 1")
 
-    # Small dimensions and the snapshot date are replaced entirely on every sync.
+    # Небольшие измерения и дата снимка заменяются целиком при каждой синхронизации.
     for table, frame in ((f"{db}.dim_city", cities), (f"{db}.dim_body_group", groups),
                          (f"{db}.snapshot", pd.DataFrame({"as_of": [settings.as_of]}))):
         ch.command(f"TRUNCATE TABLE {table}")
@@ -130,7 +130,7 @@ def _strip_comments(script: str) -> str:
 
 
 def check_parity(settings: Settings, ch: ClickHouseExecutor, months: list[date], rel_tol: float = 1e-6) -> dict:
-    """Compare the ClickHouse route_month_base with the PostgreSQL one for the synced months."""
+    """Сверить route_month_base в ClickHouse с таким же в PostgreSQL по синхронизированным месяцам."""
     cols = ", ".join(KEY + PARITY_COLUMNS)
     with connect(settings.dwh) as conn:
         pg = fetch_df(conn, f"SELECT {cols} FROM mart.route_month_base WHERE month = ANY(%(m)s)", {"m": months})

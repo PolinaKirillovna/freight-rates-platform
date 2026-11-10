@@ -34,7 +34,7 @@ RATES = pd.DataFrame({"currency_code": ["643", "840", "978"], "rate_date": [D, D
     ({"unloading_city_gcid": 9999}, "UNKNOWN_UNLOADING_CITY"),
     ({"currency_code": "156"}, "UNKNOWN_CURRENCY"),
     ({"currency_code": "840", "price": 2480.0, "nearest_rate_date": None}, "MISSING_FX_RATE"),
-    ({"currency_code": "978", "price": 900.0, "nearest_rate_date": date(2026, 9, 14)}, "MISSING_FX_RATE"),  # Monday: no rate
+    ({"currency_code": "978", "price": 900.0, "nearest_rate_date": date(2026, 9, 14)}, "MISSING_FX_RATE"),  # понедельник: курса нет
 ])
 def test_invalid_rows_go_to_quarantine_with_reason(row, reason):
     result = dq.validate(make_prices(rows=[row]), CTX)
@@ -45,7 +45,7 @@ def test_invalid_rows_go_to_quarantine_with_reason(row, reason):
 def test_valid_rows_pass_and_foreign_small_prices_are_not_rub_rule():
     prices = make_prices(rows=[{}, {"currency_code": "840", "price": 900.0}, {"loading_city_gcid": 1003, "unloading_city_gcid": 1003}])
     result = dq.validate(prices, CTX)
-    assert len(result.clean) == 3              # same-city route is kept, a USD price of 900 is valid
+    assert len(result.clean) == 3              # маршрут внутри города сохраняется, цена 900 USD валидна
     assert result.quarantine.empty
 
 
@@ -82,7 +82,7 @@ def test_body_groups_are_deduplicated_and_fall_back():
     prices = make_prices(rows=[{"body_type": 56}, {"body_type": 56}, {"body_type": None}, {"body_type": 4}, {"body_type": 777}])
     links = pd.DataFrame({
         "price_id": [1, 1, 1, 2, 2, 4],
-        "body_type_id": [56, 61, 15, 57, 1, 46],   # 56+61 -> one 'Тент' row; 15 -> 'Борт'
+        "body_type_id": [56, 61, 15, 57, 1, 46],   # 56+61 -> одна строка «Тент»; 15 -> «Борт»
     })
     groups, primary = resolve_body_groups(prices, links, body_type_dimension(BODY_TYPES))
     as_sets = groups.groupby("price_id")["body_group_code"].apply(set).to_dict()

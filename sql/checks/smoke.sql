@@ -1,4 +1,6 @@
 -- Smoke-проверки хранилища: каждая строка — название проверки и число нарушений (ожидается 0).
+-- Весь файл — один оператор SELECT, чтобы его можно было выполнить и через psql, и через psycopg.
+-- Параллельному hash join этих проверок нужен запас /dev/shm: он задан через shm_size у postgres.
 SELECT 'core: deal duplicated inside one body group' AS check_name, count(*) AS violations
 FROM (SELECT price_id, body_group_code FROM core.fact_price_body_group GROUP BY 1, 2 HAVING count(*) > 1) t
 UNION ALL

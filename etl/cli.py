@@ -1,7 +1,7 @@
-"""Command line entry point.
+"""Точка входа командной строки.
 
-    python -m etl.cli all --start 2023-01-01 --end 2027-12-31     # full backfill: ETL -> marts -> ClickHouse -> ML
-    python -m etl.cli etl --start 2026-10-01 --end 2026-10-31     # re-run one window (idempotent)
+    python -m etl.cli all --start 2023-01-01 --end 2027-12-31     # полный пересчёт: ETL -> витрины -> ClickHouse -> ML
+    python -m etl.cli etl --start 2026-10-01 --end 2026-10-31     # повтор одного окна (идемпотентно)
     python -m etl.cli marts --full-refresh
 """
 from __future__ import annotations
@@ -23,9 +23,9 @@ def _parse(argv: list[str] | None = None) -> argparse.Namespace:
         "command",
         choices=["migrate", "extract", "transform", "etl", "marts", "clickhouse", "ml", "all"],
     )
-    parser.add_argument("--start", type=date.fromisoformat, help="window start (loading_date, inclusive)")
-    parser.add_argument("--end", type=date.fromisoformat, help="window end (loading_date, inclusive)")
-    parser.add_argument("--full-refresh", action="store_true", help="recompute all mart months, not only dirty ones")
+    parser.add_argument("--start", type=date.fromisoformat, help="начало окна (loading_date, включительно)")
+    parser.add_argument("--end", type=date.fromisoformat, help="конец окна (loading_date, включительно)")
+    parser.add_argument("--full-refresh", action="store_true", help="пересчитать все месяцы витрин, а не только грязные")
     return parser.parse_args(argv)
 
 

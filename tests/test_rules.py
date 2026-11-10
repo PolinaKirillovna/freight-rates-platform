@@ -5,7 +5,7 @@ from etl.rules import body_group_code, round_half_up, split_city_region, volume_
 
 
 @pytest.mark.parametrize("weight, expected", [
-    (38.0, "G20T"), (30.0, "G20T"), (29.96, "G20T"),          # rounds up to 30.0
+    (38.0, "G20T"), (30.0, "G20T"), (29.96, "G20T"),          # округляется вверх до 30,0
     (29.94, "FTL"), (10.0, "FTL"), (9.95, "FTL"),             # 9.95 -> 10.0
     (9.94, "10T"), (5.0, "10T"),
     (4.9, "5T"), (2.5, "5T"), (2.45, "5T"),
@@ -26,7 +26,7 @@ def test_round_half_up_matches_postgres():
 
 
 def test_body_groups_follow_business_mapping():
-    # std_id values as they come from body_types for the ids listed in the business rules
+    # значения std_id, как они приходят из body_types для id из бизнес-правил
     by_id = {56: 56, 57: 56, 58: 56, 59: 56, 60: 56, 61: 56, 4: 4, 46: 4, 47: 4, 48: 4, 2: 2, 1: 15, 15: 15,
              3: 3, 5: 5, 50: 50, 65: 65, 68: 68, 26: 3}
     codes = body_group_code(pd.Series(list(by_id.values())))

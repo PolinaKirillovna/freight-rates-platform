@@ -1,4 +1,4 @@
-"""Pipeline steps with a shared signature, used by the CLI and by the Airflow DAG."""
+"""Шаги конвейера с общей сигнатурой, используются из командной строки и из DAG Airflow."""
 from __future__ import annotations
 
 import uuid

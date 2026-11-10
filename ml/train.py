@@ -1,6 +1,6 @@
-"""Train the models on a chronological split, evaluate, and batch-score test + future deals.
+"""Обучить модели на хронологическом разбиении, оценить и выполнить пакетный скоринг теста и будущих заявок.
 
-Run: python -m etl.cli ml   (or the `ml` task of the Airflow DAG)
+Запуск: python -m etl.cli ml   (или задача `ml` в DAG Airflow)
 """
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ from ml.split import TimeSplit
 
 log = get_logger(__name__)
 
-VALIDATION_DAYS = 14          # tail of train used only for CatBoost early stopping
-IQR_K = 3.0                   # train-only fence on ln(price per km)
+VALIDATION_DAYS = 14          # хвост train только для ранней остановки CatBoost
+IQR_K = 3.0                   # порог IQR по ln(цена за км), считается только на train
 
 PREDICTION_COLUMNS = [
     "price_id", "model_name", "split", "loading_date", "loading_city_gcid", "unloading_city_gcid", "body_group",
@@ -33,7 +33,7 @@ PREDICTION_COLUMNS = [
 
 
 def clean_training_target(train: pd.DataFrame, k: float = IQR_K) -> tuple[pd.DataFrame, dict]:
-    """Drop flagged outliers, then apply an IQR fence on ln(price/km) computed on train only."""
+    """Убрать размеченные выбросы, затем применить порог IQR по ln(цена/км), посчитанный только на train."""
     unflagged = train[~train["outlier_mark"]]
     log_km = np.log(unflagged[TARGET] / unflagged["distance"])
     q1, q3 = np.percentile(log_km, [25, 75])
@@ -103,7 +103,7 @@ def train_and_score(settings: Settings) -> dict:
         copy_df(conn, "ml.model_metrics", pd.DataFrame(metrics_rows),
                 ["run_id", "model_name", "split", "n_rows", "r2", "mape_pct", "rmse_rub", "mae_rub"])
         copy_df(conn, "ml.feature_importance", pd.DataFrame(importance_rows), ["run_id", "model_name", "feature", "importance"])
-        # Predictions are a snapshot: replace them atomically, so re-runs never duplicate rows.
+        # Прогнозы — снимок: заменяются атомарно, поэтому повторы никогда не задваивают строки.
         conn.execute("DELETE FROM mart.ml_price_predictions")
         n_pred = copy_df(conn, "mart.ml_price_predictions", predictions, PREDICTION_COLUMNS)
         conn.commit()
@@ -132,7 +132,7 @@ def _prediction_frame(model, rows: pd.DataFrame, X: pd.DataFrame, split_name: st
         out["actual_price_rub"] = actual
         out["abs_error_rub"] = np.abs(actual - pred)
         out["ape_pct"] = np.abs(actual - pred) / actual * 100
-    else:  # future deals: the source may carry a planned price, but it is not a realised fact
+    else:  # будущие заявки: в источнике может быть плановая цена, но это не состоявшийся факт
         out["actual_price_rub"] = np.nan
         out["abs_error_rub"] = np.nan
         out["ape_pct"] = np.nan

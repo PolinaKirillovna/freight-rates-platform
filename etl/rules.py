@@ -1,4 +1,4 @@
-"""Domain rules shared by ETL, marts and ML: categories, body groups, currency codes."""
+"""Доменные правила, общие для ETL, витрин и ML: категории, группы кузова, коды валют."""
 from __future__ import annotations
 
 import numpy as np
@@ -8,14 +8,14 @@ RUB, USD, EUR = "643", "840", "978"
 KNOWN_CURRENCIES = {RUB, USD, EUR}
 FACT_PRICE_TYPES = (1, 2, 3, 4, 5, 9)
 CARRIER_PRICE_TYPES = (3, 9)
-RUB_MIN_VALID_PRICE = 1000.0          # source validation: RUB price <= 1000 is not a real trip price
+RUB_MIN_VALID_PRICE = 1000.0          # проверка источника: рублёвая цена <= 1000 — не цена рейса
 
-# Standardised body groups: code = std_id of the parent type; 0 = other, -1 = not specified.
+# Стандартизированные группы кузова: код = std_id родительского типа; 0 — «Прочие», -1 — «Не указан».
 BODY_GROUPS = {56: "Тент", 4: "Рефрижератор", 2: "Изотерм", 15: "Борт", 0: "Прочие", -1: "Не указан"}
 STANDARD_GROUP_CODES = {56, 4, 2, 15}
 OTHER_GROUP, UNKNOWN_GROUP = 0, -1
 
-WEIGHT_BINS = [  # (lower bound inclusive, category), checked top-down on weight rounded to 0.1 t
+WEIGHT_BINS = [  # (нижняя граница включительно, категория), проверяется сверху вниз по весу, округлённому до 0,1 т
     (30.0, "G20T"),
     (10.0, "FTL"),
     (5.0, "10T"),
@@ -25,7 +25,7 @@ WEIGHT_BINS = [  # (lower bound inclusive, category), checked top-down on weight
 
 
 def round_half_up(values: pd.Series, decimals: int = 1) -> pd.Series:
-    """Round like PostgreSQL round(numeric, n): half away from zero, robust to float noise (9.95 -> 10.0)."""
+    """Округление как round(numeric, n) в PostgreSQL: половина — от нуля, устойчиво к шуму float (9,95 -> 10,0)."""
     factor = 10 ** decimals
     arr = values.astype("float64").to_numpy()
     rounded = np.sign(arr) * np.floor(np.abs(arr) * factor + 0.5 + 1e-9) / factor
@@ -45,13 +45,13 @@ def volume_category(volume_m3: pd.Series) -> pd.Series:
 
 
 def body_group_code(std_id: pd.Series) -> pd.Series:
-    """Map body_types.std_id to the business group code; everything non-standard is 'Прочие'."""
+    """Сопоставить body_types.std_id с кодом бизнес-группы; всё нестандартное — «Прочие»."""
     std = pd.to_numeric(std_id, errors="coerce")
     return pd.Series(np.where(std.isin(list(STANDARD_GROUP_CODES)), std, OTHER_GROUP), index=std_id.index).astype("int16")
 
 
 def split_city_region(full_name_local: pd.Series) -> pd.DataFrame:
-    """'Казань, Республика Татарстан' -> city 'Казань', region 'Республика Татарстан'."""
+    """'Казань, Республика Татарстан' -> город 'Казань', регион 'Республика Татарстан'."""
     parts = full_name_local.fillna("").str.split(",", n=1, expand=True)
     if parts.shape[1] == 1:
         parts[1] = None

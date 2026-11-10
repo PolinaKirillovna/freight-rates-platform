@@ -1,8 +1,8 @@
-"""Extract: source PostgreSQL -> raw layer of the warehouse.
+"""Извлечение: источник PostgreSQL -> слой raw хранилища.
 
-Deals (and their child rows) are re-extracted by a loading_date window and atomically replace
-the same window in raw (DELETE + INSERT in one transaction). Dictionaries are small and are
-replaced as full snapshots. Data is streamed with COPY TO/FROM STDOUT — nothing goes row by row.
+Сделки (и их дочерние строки) перечитываются окном loading_date и атомарно заменяют то же окно
+в raw (DELETE + INSERT в одной транзакции). Справочники малы и заменяются полными снимками.
+Данные передаются потоком через COPY TO/FROM STDOUT — ничего не идёт построчно.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ DICTIONARIES = {
 
 
 def _stream(src: psycopg.Connection, dst: psycopg.Connection, select_sql: str, params: tuple, target: str) -> int:
-    """Pipe `COPY (select) TO STDOUT` from source into `COPY target FROM STDIN` on the warehouse."""
+    """Перелить `COPY (select) TO STDOUT` из источника в `COPY target FROM STDIN` на хранилище."""
     query = psycopg.ClientCursor(src).mogrify(select_sql, params) if params else select_sql
     with src.cursor() as scur, dst.cursor() as dcur:
         with scur.copy(f"COPY ({query}) TO STDOUT") as out, dcur.copy(f"COPY {target} FROM STDIN") as inp:
@@ -46,7 +46,7 @@ def extract_window(settings: Settings, start: date, end: date, batch_id: uuid.UU
     window = (start, end)
     price_cols = ", ".join(PRICE_COLUMNS)
     with connect(settings.source) as src, connect(settings.dwh) as dwh:
-        src.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")  # consistent snapshot
+        src.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")  # согласованный снимок
 
         dwh.execute(
             "CREATE TEMP TABLE stg_prices (LIKE raw.prices INCLUDING DEFAULTS) ON COMMIT DROP;"
@@ -72,8 +72,8 @@ def extract_window(settings: Settings, start: date, end: date, batch_id: uuid.UU
             window, "stg_price_dates (price_id, price_date)",
         )
 
-        # Replace the window. A deal whose loading_date moved into this window from another one
-        # is also replaced (match by id), so a re-extract never leaves two versions of one deal.
+        # Замена окна. Сделка, чья loading_date переехала в это окно из другого,
+        # тоже заменяется (сопоставление по id), поэтому повтор не оставит две версии одной сделки.
         dwh.execute("UPDATE stg_prices SET _batch_id = %s", (batch_id,))
         dwh.execute(
             "CREATE TEMP TABLE replaced_ids ON COMMIT DROP AS "
