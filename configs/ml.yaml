@@ -10,8 +10,10 @@ split:
 cleaning:
   iqr_k: 3.0             # множитель порога IQR по ln(цена за км), считается только на train
 
+# target_transform: log — модель учится на np.log(цена), прогноз — np.exp(predict); none — на рублях.
 models:
   catboost:
+    target_transform: log
     loss_function: RMSE
     learning_rate: 0.06
     depth: 8
@@ -20,7 +22,9 @@ models:
     od_type: Iter
     od_wait: 200
   ridge:
+    target_transform: none   # оставлена на исходной цели для сопоставимости с базовой постановкой
     alpha: 1.0
   decision_tree:
+    target_transform: log
     max_depth: 14
     min_samples_leaf: 15

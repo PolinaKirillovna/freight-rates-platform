@@ -64,9 +64,10 @@ def train_and_score(settings: Settings) -> dict:
     val_mask = train["loading_date"] >= val_start
     X_val, y_val = X_train[val_mask.to_numpy()], y_train[val_mask.to_numpy()]
 
-    models = [CatBoostModel(seed=settings.random_seed, params=cfg.catboost),
-              ridge_baseline(settings.random_seed, cfg.ridge),
-              tree_baseline(settings.random_seed, cfg.decision_tree)]
+    tf = cfg.target_transforms
+    models = [CatBoostModel(seed=settings.random_seed, params=cfg.catboost, target_transform=tf["catboost"]),
+              ridge_baseline(settings.random_seed, cfg.ridge, tf["ridge"]),
+              tree_baseline(settings.random_seed, cfg.decision_tree, tf["decision_tree"])]
     X_test, X_test_clean, X_future = build_features(test), build_features(test_clean), build_features(future)
 
     metrics_rows, importance_rows, results = [], [], {}
