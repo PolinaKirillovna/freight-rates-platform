@@ -1,8 +1,8 @@
-"""Transform: raw window -> core (validated, currency-normalised, categorised facts).
+"""Преобразование: окно raw -> core (проверенные, приведённые к рублям, категоризованные факты).
 
-The whole write is one transaction: dimensions are upserted, the window of facts is replaced
-(DELETE + COPY), quarantine for the window is replaced, and months touched by the change are
-marked dirty for downstream consumers (PostgreSQL marts, ClickHouse).
+Вся запись — одна транзакция: измерения обновляются upsert'ом, окно фактов заменяется
+(DELETE + COPY), карантин за окно заменяется, а затронутые изменением месяцы помечаются
+грязными для потребителей ниже по течению (витрины PostgreSQL, ClickHouse).
 """
 from __future__ import annotations
 
@@ -38,13 +38,13 @@ FACT_COLUMNS = [
 ]
 
 
-# ----------------------------------------------------------------------------- pure transformations
+# ----------------------------------------------------------------------------- чистые преобразования
 
 def enrich_prices(clean: pd.DataFrame, rates: pd.DataFrame) -> pd.DataFrame:
-    """Convert to RUB by the exact rate on nearest_rate_date and fill missing categories.
+    """Привести к рублям по точному курсу на nearest_rate_date и дозаполнить пустые категории.
 
-    `rates` has columns currency_code, rate_date, rate. RUB always converts at 1.0.
-    Rows without an exact rate must already be rejected by DQ (rule MISSING_FX_RATE).
+    У `rates` столбцы currency_code, rate_date, rate. Рубль всегда конвертируется по 1,0.
+    Строки без точного курса должны быть уже отбракованы проверками качества (правило MISSING_FX_RATE).
     """
     df = clean.copy()
     merged = df.merge(
@@ -78,11 +78,11 @@ def body_type_dimension(body_types: pd.DataFrame) -> pd.DataFrame:
 
 
 def resolve_body_groups(prices: pd.DataFrame, links: pd.DataFrame, body_dim: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
-    """One row per (deal, body group) + the primary group of each deal.
+    """Одна строка на (сделка, группа кузова) + основная группа каждой сделки.
 
-    Links come from price_body_types; a deal without links falls back to prices.body_type, then to
-    'Не указан'. Several child types of one group (e.g. 56 and 61) collapse into one row, so a price
-    is never counted twice inside a group. Unknown type ids fall into 'Прочие'.
+    Связи берутся из price_body_types; сделка без связей откатывается к prices.body_type, затем к
+    «Не указан». Несколько дочерних типов одной группы (например, 56 и 61) схлопываются в одну строку,
+    поэтому цена не учитывается дважды внутри группы. Неизвестные id типов попадают в «Прочие».
     """
     group_by_type = dict(zip(body_dim["body_type_id"], body_dim["body_group_code"], strict=False))
 
@@ -156,7 +156,7 @@ def _upsert_dimensions(conn, body_dim: pd.DataFrame) -> None:
                full_name_local, latitude, longitude,
                count(*) OVER (PARTITION BY gc_id)
         FROM raw.cities
-        ORDER BY gc_id, id                          -- canonical row = minimal cities.id per gc_id
+        ORDER BY gc_id, id                          -- каноническая строка = минимальный cities.id на gc_id
         ON CONFLICT (gc_id) DO UPDATE SET
             source_city_id = EXCLUDED.source_city_id, city_name = EXCLUDED.city_name,
             region_name = EXCLUDED.region_name, full_name_local = EXCLUDED.full_name_local,

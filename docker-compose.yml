@@ -23,7 +23,9 @@ x-pipeline-env: &pipeline-env
 
 services:
   postgres:
-    image: postgres:17
+    image: postgres:17.6
+    # 64 МБ /dev/shm по умолчанию не хватает параллельным hash join на 300 тыс. сделок
+    shm_size: 1gb
     command: >
       postgres -c shared_buffers=512MB -c work_mem=64MB -c maintenance_work_mem=256MB
                -c max_wal_size=2GB -c checkpoint_timeout=15min
@@ -49,15 +51,16 @@ services:
       - "${POSTGRES_PORT_HOST:-5432}:5432"
     healthcheck:
       # Во время первичной инициализации сервер слушает только сокет, поэтому TCP-проверка
-      # проходит лишь после генерации данных источника.
+      # проходит лишь после генерации данных источника. Бюджет ожидания — примерно 25 минут:
+      # на медленной машине генерация 300 тыс. сделок занимает до 10–15 минут.
       test: ["CMD-SHELL", "psql -h 127.0.0.1 -U $${POSTGRES_USER} -d deals_bigdata -tAc 'SELECT 1 FROM prices LIMIT 1' | grep -q 1"]
       interval: 5s
       timeout: 5s
-      retries: 60
+      retries: 240
       start_period: 300s
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8
+    image: clickhouse/clickhouse-server:24.8.14.39
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-freight}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-freight}
@@ -103,7 +106,9 @@ services:
       SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
     ports:
       - "${SUPERSET_PORT_HOST:-8088}:8088"
+    restart: on-failure
     depends_on:
+      postgres: {condition: service_healthy}
       pipeline: {condition: service_completed_successfully}
 
   # Оркестрация по расписанию: docker compose --profile airflow up

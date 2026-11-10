@@ -1,7 +1,7 @@
-"""Model zoo: CatBoost (main model) and two scikit-learn baselines.
+"""Набор моделей: CatBoost (основная) и два бейзлайна на scikit-learn.
 
-Every preprocessing step that learns statistics (imputer, scaler, encoders) lives inside a Pipeline
-and is fitted on the training split only.
+Каждый шаг предобработки, обучающий статистики (импьютер, масштабатор, кодировщики), живёт внутри
+Pipeline и обучается только на обучающей выборке.
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from ml.features import CATEGORICAL_FEATURES, NUMERIC_FEATURES
 
 
 class RegressionModel(ABC):
-    """Common interface for the price models: fit on train, predict, explain, describe."""
+    """Общий интерфейс моделей цены: обучение на train, предсказание, важность признаков, описание."""
 
     name: str
 
@@ -46,20 +46,20 @@ class RegressionModel(ABC):
 @dataclass
 class CatBoostModel(RegressionModel):
     seed: int
-    params: dict          # hyperparameters come from configs/ml.yaml (see ml.config)
+    params: dict          # гиперпараметры берутся из configs/ml.yaml (см. ml.config)
     name: str = "catboost"
     model: CatBoostRegressor | None = None
     best_iterations: int | None = None
 
     def fit(self, X: pd.DataFrame, y: pd.Series, X_val: pd.DataFrame, y_val: pd.Series) -> CatBoostModel:
         cat_idx = [X.columns.get_loc(c) for c in CATEGORICAL_FEATURES]
-        # 1) early stopping on the last weeks of train (validation strictly after the fitting part)
+        # 1) ранняя остановка на последних неделях train (валидация строго после обучающей части)
         probe = CatBoostRegressor(**self.params, random_seed=self.seed, verbose=False, allow_writing_files=False)
         fit_mask = ~X.index.isin(X_val.index)
         probe.fit(Pool(X[fit_mask], y[fit_mask], cat_features=cat_idx),
                   eval_set=Pool(X_val, y_val, cat_features=cat_idx), use_best_model=True)
         self.best_iterations = int(probe.get_best_iteration()) + 1
-        # 2) refit on the full train window with the found number of trees
+        # 2) переобучение на всём окне train с найденным числом деревьев
         final_params = {k: v for k, v in self.params.items() if k not in {"od_type", "od_wait"}}
         final_params["iterations"] = self.best_iterations
         self.model = CatBoostRegressor(**final_params, random_seed=self.seed, verbose=False, allow_writing_files=False)

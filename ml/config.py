@@ -1,7 +1,7 @@
-"""Load ML hyperparameters from configs/ml.yaml (override the path with ML_CONFIG).
+"""Загрузка гиперпараметров ML из configs/ml.yaml (путь переопределяется переменной ML_CONFIG).
 
-The YAML is the single source of truth for the training run; a snapshot ends up in
-ml.model_runs.params. A small dataclass validates that all required keys are present.
+YAML — единственный источник истины для прогона обучения; снимок попадает в
+ml.model_runs.params. Небольшой dataclass проверяет, что все обязательные ключи на месте.
 """
 from __future__ import annotations
 

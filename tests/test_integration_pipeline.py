@@ -1,4 +1,4 @@
-"""End-to-end checks against a live warehouse (RUN_INTEGRATION=1, after `python -m etl.cli all`)."""
+"""Сквозные проверки на поднятом хранилище (RUN_INTEGRATION=1, после `python -m etl.cli all`)."""
 import uuid
 from datetime import date
 
@@ -29,7 +29,7 @@ def settings():
 
 
 def _checksum(settings):
-    """Counts compare exactly; float sums compare with a relative tolerance (summation order may differ)."""
+    """Счётчики сравниваются точно; суммы float — с относительным допуском (порядок суммирования может отличаться)."""
     with connect(settings.dwh) as conn:
         row = conn.execute(CHECKSUM_SQL).fetchone()
     return [v if isinstance(v, int) else pytest.approx(float(v), rel=1e-12) for v in row]
@@ -38,7 +38,7 @@ def _checksum(settings):
 def test_rerun_of_a_window_does_not_change_anything(settings):
     before = _checksum(settings)
     batch = uuid.uuid4()
-    for _ in range(2):  # two consecutive re-runs of the same window
+    for _ in range(2):  # два повтора одного и того же окна подряд
         steps.step_extract(settings, batch, date(2026, 9, 20), date(2026, 11, 15))
         steps.step_transform(settings, batch, date(2026, 9, 20), date(2026, 11, 15))
         steps.step_marts(settings, batch)
@@ -66,7 +66,7 @@ def test_city_duplicates_do_not_multiply_deals(settings):
             "SELECT (SELECT count(*) FROM core.fact_price f JOIN core.dim_city c ON c.gc_id = f.loading_city_gcid),"
             "       (SELECT count(*) FROM core.fact_price)"
         ).fetchone()
-    assert dup_gcids >= 2          # Москва and Казань have duplicate gc_id rows in the source
+    assert dup_gcids >= 2          # у Москвы и Казани в источнике есть дублирующие строки gc_id
     assert joined == plain
 
 
@@ -76,7 +76,7 @@ def test_clickhouse_layer_matches_postgres(settings, tmp_path):
 
     ch = chdb_executor.ChdbExecutor(str(tmp_path))
     first = sync_clickhouse(settings, full_refresh=True, ch=ch)
-    second = sync_clickhouse(settings, full_refresh=True, ch=ch)  # idempotent re-sync
+    second = sync_clickhouse(settings, full_refresh=True, ch=ch)  # идемпотентная повторная синхронизация
     assert first["parity_ok"] and second["parity_ok"]
     count = ch.query_df(f"SELECT count() AS n FROM {settings.clickhouse.database}.fact_market_rows FINAL")["n"][0]
     assert count == first["rows_synced"]

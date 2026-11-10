@@ -1,9 +1,8 @@
-"""Pipeline steps with a shared signature, used by the CLI and by the Airflow DAG.
+"""Шаги конвейера с общей сигнатурой, используются из командной строки и из DAG Airflow.
 
-Every step is a PipelineStep: the template method ``run()`` journals the run through
-``run_journal`` and delegates the actual work to the abstract ``_execute()``. The
-``step_*`` functions stay as thin wrappers so the CLI, the DAG and the tests keep calling
-them unchanged.
+Каждый шаг — наследник PipelineStep: шаблонный метод ``run()`` журналирует запуск через
+``run_journal`` и делегирует саму работу абстрактному ``_execute()``. Функции ``step_*``
+остаются тонкими обёртками, поэтому CLI, DAG и тесты вызывают шаги без изменений.
 """
 from __future__ import annotations
 
@@ -16,7 +15,7 @@ from common.db import apply_migrations, run_journal
 
 
 class PipelineStep(ABC):
-    """Template method: record the run in etl.run_log, then run the step-specific body."""
+    """Шаблонный метод: записать запуск в etl.run_log, затем выполнить тело конкретного шага."""
 
     name: str
 
@@ -40,7 +39,7 @@ class MigrateStep(PipelineStep):
     name = "migrate"
 
     def _journal(self, settings: Settings, batch_id: uuid.UUID, *args, **kwargs):
-        # The run_log table itself may not exist yet on the very first migration.
+        # Таблицы run_log может ещё не быть при самой первой миграции.
         return super()._journal(settings, batch_id) if _journal_ready(settings) else _noop()
 
     def _execute(self, settings: Settings, batch_id: uuid.UUID) -> dict:
@@ -98,7 +97,7 @@ class MlStep(PipelineStep):
         return train_and_score(settings)
 
 
-# Thin wrappers kept so the CLI, the DAG and the tests call steps unchanged.
+# Тонкие обёртки, чтобы CLI, DAG и тесты вызывали шаги без изменений.
 
 def step_migrate(settings: Settings, batch_id: uuid.UUID) -> dict:
     return MigrateStep().run(settings, batch_id)

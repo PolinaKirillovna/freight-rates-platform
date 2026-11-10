@@ -1,14 +1,14 @@
-# Hyperparameters for the ML training run (ml/train.py).
-# This file is the single source of truth; a snapshot is stored in ml.model_runs.params on every run.
-# Override the path with the ML_CONFIG environment variable.
+# Гиперпараметры прогона обучения ML (ml/train.py).
+# Этот файл — единственный источник истины; снимок кладётся в ml.model_runs.params на каждом запуске.
+# Путь переопределяется переменной окружения ML_CONFIG.
 
 split:
-  train_months: 3        # length of the training window
-  test_weeks: 3          # length of the test window ending at the snapshot date
-  validation_days: 14    # tail of train used only for CatBoost early stopping
+  train_months: 3        # длина обучающего окна
+  test_weeks: 3          # длина тестового окна, заканчивается датой снимка
+  validation_days: 14    # хвост train только для ранней остановки CatBoost
 
 cleaning:
-  iqr_k: 3.0             # train-only IQR fence multiplier on ln(price per km)
+  iqr_k: 3.0             # множитель порога IQR по ln(цена за км), считается только на train
 
 models:
   catboost:

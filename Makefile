@@ -1,5 +1,5 @@
 # Все команды выполняются на своей машине, в корне репозитория.
-.PHONY: up down reset logs airflow test test-integration backfill rerun-window psql smoke
+.PHONY: up down reset logs airflow test test-integration backfill rerun-window psql smoke analyze
 
 up:                ## поднять всё: PostgreSQL, ClickHouse, конвейер, Superset
 	docker compose up --build
@@ -21,6 +21,9 @@ backfill:          ## полный пересчёт: ETL -> витрины -> Cl
 
 rerun-window:      ## повтор окна, пример: make rerun-window START=2026-10-01 END=2026-10-31
 	docker compose run --rm pipeline python -m etl.cli etl --start $(START) --end $(END)
+
+analyze:           ## отчёт о достижимой точности модели (нужен полный прогон конвейера)
+	docker compose run --rm pipeline python -m ml.analysis
 
 test:              ## модульные тесты (без базы)
 	docker compose run --rm --no-deps pipeline pytest -q

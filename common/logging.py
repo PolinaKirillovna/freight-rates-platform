@@ -1,4 +1,4 @@
-"""Structured JSON logging: one event per line, extra fields go to the payload."""
+"""Структурированные JSON-логи: одно событие в строке, дополнительные поля — в полезную нагрузку."""
 from __future__ import annotations
 
 import json

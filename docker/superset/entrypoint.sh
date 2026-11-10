@@ -1,8 +1,21 @@
 #!/usr/bin/env bash
-# Superset metadata init + provisioning of databases, datasets, charts and the dashboard, then the web server.
+# Инициализация метаданных Superset, создание подключений, наборов данных, графиков и дашборда,
+# затем веб-сервер. Миграция метаданных дожидается базы с повторами: кратковременная
+# недоступность PostgreSQL на старте не должна останавливать контейнер насовсем.
 set -euo pipefail
 
-superset db upgrade
+for attempt in $(seq 1 30); do
+    if superset db upgrade; then
+        break
+    fi
+    if [ "$attempt" -eq 30 ]; then
+        echo "ERROR: metadata database is still unavailable after ${attempt} attempts" >&2
+        exit 1
+    fi
+    echo "Metadata database is not ready (attempt ${attempt}/30), retrying in 10 s"
+    sleep 10
+done
+
 superset fab create-admin \
     --username "${SUPERSET_ADMIN_USER}" --password "${SUPERSET_ADMIN_PASSWORD}" \
     --firstname Admin --lastname Freight --email admin@example.com || true
