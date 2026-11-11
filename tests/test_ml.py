@@ -6,9 +6,9 @@ import pytest
 
 from ml.features import FEATURES, FORBIDDEN_FEATURES, TARGET, add_calendar_features, assert_no_leakage, build_features
 from ml.metrics import regression_report
-from ml.models import tree_baseline
+from ml.models import CatBoostModel, tree_baseline
 from ml.split import TimeSplit
-from ml.train import clean_training_target
+from ml.train import CHAMPION_MODEL, clean_training_target
 
 AS_OF = date(2026, 10, 26)
 
@@ -27,6 +27,12 @@ def test_boundary_day_belongs_only_to_test_and_future_is_separate():
     assert m["test"].tolist() == [False, False, False, True, True, False]
     assert m["future"].tolist() == [False, False, False, False, False, True]
     assert not (m["train"] & m["test"]).any()
+
+
+def test_champion_is_fixed_to_catboost_not_chosen_on_test():
+    # CatBoost — заранее определённая основная модель; тест не должен участвовать в выборе модели.
+    assert CHAMPION_MODEL == "catboost"
+    assert CHAMPION_MODEL == CatBoostModel(seed=0, params={}).name
 
 
 def test_cyclic_features_are_continuous_over_new_year():

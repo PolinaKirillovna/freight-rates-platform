@@ -23,6 +23,11 @@ from ml.split import TimeSplit
 
 log = get_logger(__name__)
 
+# CatBoost — заранее определённая основная модель проекта, её фиксируем как лучшую (champion) заранее.
+# Выбирать модель по метрике на тесте методологически некорректно — тогда тест участвует в выборе
+# и перестаёт быть независимой итоговой оценкой. Все три модели по-прежнему обучаются и оцениваются.
+CHAMPION_MODEL = "catboost"
+
 PREDICTION_COLUMNS = [
     "price_id", "model_name", "split", "loading_date", "loading_city_gcid", "unloading_city_gcid", "body_group",
     "weight_category", "distance", "outlier_mark", "actual_price_rub", "predicted_price_rub", "abs_error_rub",
@@ -85,7 +90,7 @@ def train_and_score(settings: Settings) -> dict:
             importance_rows.append({"run_id": str(run_id), "model_name": model.name, "feature": feature, "importance": value})
         log.info("model evaluated", extra={"model": model.name, **{f"test_{k}": round(v, 4) for k, v in per_split["test"].items()}})
 
-    champion = min(results, key=lambda name: results[name]["test"]["mape_pct"])
+    champion = CHAMPION_MODEL
     scored_at = datetime.now(UTC)
     predictions = pd.concat(
         [_prediction_frame(m, test, X_test, "test", run_id, scored_at, m.name == champion) for m in models]
