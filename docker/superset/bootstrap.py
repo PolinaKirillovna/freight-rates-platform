@@ -84,7 +84,7 @@ CHARTS: dict[str, tuple[str, str, dict]] = {
     "MAPE модели на тесте, %": ("model_quality", "big_number_total", {
         "metric": metric("MAX(mape_pct)", "MAPE, %"),
         "adhoc_filters": [where("is_champion", "==", True), where("split", "==", "test")],
-        "y_axis_format": ".2f", "subheader": "чемпион, отложенные 3 недели",
+        "y_axis_format": ".2f", "subheader": "CatBoost · тестовый период — 3 недели",
     }),
     "R² модели на тесте": ("model_quality", "big_number_total", {
         "metric": metric("MAX(r2)", "R²"),
@@ -120,7 +120,7 @@ CHARTS: dict[str, tuple[str, str, dict]] = {
         "adhoc_filters": [],
         "row_limit": 500, "table_timestamp_format": "smart_date", "show_cell_bars": True,
     }),
-    "Факт против прогноза (чемпион), средняя ставка по дням": ("predictions", "echarts_timeseries_line", {
+    "Фактическая и прогнозная ставки CatBoost по дням": ("predictions", "echarts_timeseries_line", {
         "x_axis": "loading_date", "time_grain_sqla": "P1D",
         "metrics": [metric("AVG(actual_price_rub)", "Факт, ₽"), metric("AVG(predicted_price_rub)", "Прогноз, ₽")],
         "groupby": [], "adhoc_filters": [where("is_champion", "==", True)],
@@ -137,7 +137,7 @@ CHARTS: dict[str, tuple[str, str, dict]] = {
     }),
     # Перевозчики считаются по сырым строкам (uniqExactIf), а не суммой по ячейкам:
     # перевозчик на нескольких группах кузова одного маршрута учитывается один раз.
-    "ClickHouse: самые плотные направления последнего месяца": ("ch_route_dense", "table", {
+    "ClickHouse: направления с наибольшим числом рейсов": ("ch_route_dense", "table", {
         "query_mode": "raw",
         "all_columns": ["route", "trips_count", "carriers_count", "median_km"],
         "order_by_cols": [json.dumps(["trips_count", False])],
@@ -166,8 +166,8 @@ LAYOUT = [  # строки из (имя графика, ширина из 12, в
     [("MAPE модели на тесте, %", 4, 25), ("R² модели на тесте", 4, 25), ("Сделок в карантине", 4, 25)],
     [("Коридор ставок по выбранному маршруту", 6, 60), ("Медиана ₽/км по группам кузова на выбранном маршруте", 6, 60)],
     [("Сеть маршрутов за последний месяц", 12, 80)],
-    [("Факт против прогноза (чемпион), средняя ставка по дням", 8, 60), ("Важность признаков CatBoost", 4, 60)],
-    [("Причины отбраковки", 4, 55), ("ClickHouse: самые плотные направления последнего месяца", 8, 55)],
+    [("Фактическая и прогнозная ставки CatBoost по дням", 8, 60), ("Важность признаков CatBoost", 4, 60)],
+    [("Причины отбраковки", 4, 55), ("ClickHouse: направления с наибольшим числом рейсов", 8, 55)],
 ]
 
 # Нативные фильтры: имя -> (столбец, график-источник значений, графики в зоне действия,

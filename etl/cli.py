@@ -25,7 +25,7 @@ def _parse(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--start", type=date.fromisoformat, help="начало окна (loading_date, включительно)")
     parser.add_argument("--end", type=date.fromisoformat, help="конец окна (loading_date, включительно)")
-    parser.add_argument("--full-refresh", action="store_true", help="пересчитать все месяцы витрин, а не только грязные")
+    parser.add_argument("--full-refresh", action="store_true", help="пересчитать все месяцы витрин, а не только требующие пересчёта")
     return parser.parse_args(argv)
 
 
